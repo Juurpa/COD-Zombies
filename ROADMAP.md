@@ -17,11 +17,16 @@ kein natives Multithreading, kein natives NavMesh/RVO2).
 ## Phase 2 — Zombie-KI: FSM + Steering (kein volles ECS)
 - Kein Rewrite auf ECS — zu invasiv für die aktuelle main.js-Größe (~4200
   Zeilen). Stattdessen: bestehenden Zombie-Objekten eine explizite FSM geben.
-- [ ] Zustände: `idle`, `wander`, `alert`, `chase`, `attack` als String-Feld
+- [x] Zustände: `idle`, `wander`, `alert`, `chase`, `attack` als String-Feld
       pro Zombie, Übergänge in einer zentralen `updateZombieFSM(z, dt)`.
-- [ ] Einfaches Steering (Separation) statt RVO2: pro Zombie nur Nachbarn
+      (Reines Refactoring: `idle`/`wander`/`alert` sind als Vokabular
+      angelegt, aber mangels Wahrnehmungslogik noch nicht erreichbar —
+      Zombies verfolgen weiterhin sofort nach dem Aufstehen.)
+- [x] Einfaches Steering (Separation) statt RVO2: pro Zombie nur Nachbarn
       innerhalb eines Grids/Radius prüfen (Spatial-Grid, siehe Performance-
       Punkt aus CHANGELOG.md "Known follow-ups") statt O(n²) über alle.
+      (Bei aktuell max. 24 Zombies kein messbarer FPS-Gewinn — Engpass
+      ist GPU-seitig, siehe Phase 5 — aber korrekte, skalierbare Basis.)
 - [ ] Pathfinding: `three-pathfinding` (npm-Paket, nutzt vorgebackenes
       NavMesh aus dem Level) statt eigenem A*, falls Hindernisumgehung nötig
       wird — aktuell reicht ggf. weiterhin direkte Steuerung + Kollision.
