@@ -1,5 +1,3 @@
-
-<<<<<<< HEAD
 # 🧟‍♂️ UNTOT Zombies
 
 **UNTOT Zombies** ist ein rundenbasiertes 3D-Zombie-Survival-Spiel, inspiriert von klassischen Wave-Shootern. Entwickelt mit **Three.js** und verpackt als **Electron-Desktop-App**, bietet es rasante Action, düstere Atmosphäre und komplexe Spielmechaniken direkt auf deinem PC.
