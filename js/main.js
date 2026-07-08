@@ -3470,8 +3470,212 @@ function zombieInside(z) {
   return z.pos.x > -19.9 && z.pos.x < 59.9 && z.pos.z > -59.9 && z.pos.z < 19.9;
 }
 
+// Grid für die Nachbarsuche bei der Zombie-Abstoßung (ersetzt den früheren
+// O(n²)-Check über alle Zombies, siehe CHANGELOG.md "Known follow-ups").
+// Zellgröße >= Interaktionsradius (0.8m), damit ein Nachbar innerhalb der
+// Reichweite garantiert in der gleichen oder einer der 8 Nachbarzellen liegt.
+const ZOMBIE_GRID_CELL = 1.0;
+const zombieGrid = new Map();
+function buildZombieGrid() {
+  zombieGrid.clear();
+  for (const z of zombies) {
+    if (z.state !== 'chase') continue;
+    const key = Math.floor(z.pos.x / ZOMBIE_GRID_CELL) + ',' + Math.floor(z.pos.z / ZOMBIE_GRID_CELL);
+    let bucket = zombieGrid.get(key);
+    if (!bucket) zombieGrid.set(key, bucket = []);
+    bucket.push(z);
+  }
+}
+
+// Zombie-KI-Zustände. 'idle'/'wander'/'alert' sind für eine spätere
+// Wahrnehmungslogik vorgesehen (Phase 2, noch nicht implementiert) — aktuell
+// verfolgen Zombies den Spieler sofort nach dem Aufstehen, daher sind nur
+// 'chase' und 'attack' erreichbar. z.aiState wird an keiner anderen Stelle
+// gelesen; das Setzen ist rein additiv und ändert kein bestehendes Verhalten.
+const ZOMBIE_AI_STATES = ['idle', 'wander', 'alert', 'chase', 'attack'];
+
+// Bündelt die KI-/Bewegungslogik eines aktiven (nicht toten, nicht gerade
+// aufstehenden) Zombies: Ziel wählen (Spieler/Fenster/Tür), Bewegung,
+// Abstoßung gegenüber Nachbarn, Nahkampf-Angriff, Animations-FSM.
+// 1:1 aus updateZombies() extrahiert — reines Refactoring, keine
+// Verhaltensänderung (siehe ROADMAP.md Phase 2).
+function updateZombieFSM(z, dt, pZone, inside) {
+  z.aiState = 'chase';
+  const zZone = zoneAt(z.pos.x, z.pos.z);
+  let tx = player.pos.x, tz = player.pos.z;
+  let isAttackingWindow = false;
+
+  // Stagger: kurz taumeln statt laufen
+  if (z.staggerT > 0) z.staggerT -= dt;
+
+  if (!z.isDog && z.win && !z.climbing) {
+    let wx = z.win.pos.x, wz = z.win.pos.z;
+    const wd = Math.hypot(wx - z.pos.x, wz - z.pos.z);
+    if (z.win.boards > 0 && wd < 1.35) {
+      // An der Barrikade: Bretter abreißen
+      isAttackingWindow = true;
+      z.aiState = 'attack';
+      z.playAnim('attack', 0.12);
+      z.attackCd -= dt;
+      if (z.attackCd <= 0) {
+        z.win.boards--;
+        z.win.meshes[z.win.boards].visible = false;
+        z.attackCd = 1.5;
+        play3D('barricade_break_', wx, wz);
+        // Holzsplitter
+        for (let s = 0; s < 12; s++) {
+          spawnParticle(new THREE.Vector3(wx, 1.6, wz),
+            new THREE.Vector3(rand(-2, 2), rand(0.5, 3), rand(-2, 2)), 0x8a6a40, rand(0.3, 0.7));
+        }
+      }
+    } else if (z.win.boards > 0) {
+      tx = wx; tz = wz; // zum Fenster laufen
+    } else {
+      // Fenster offen → durchklettern
+      if (wd < 1.7) {
+        z.climbing = true;
+        z.climbT = 0;
+        z.climbStart = z.pos.clone();
+        z.climbStart.y = z.group.position.y;
+        z.climbEnd = new THREE.Vector3().copy(z.win.inner);
+        z.playAnim(z.actions && z.actions.crawl ? 'crawl' : 'walk', 0.15);
+      } else {
+        tx = wx; tz = wz;
+      }
+    }
+  }
+
+  if (z.climbing) {
+    z.climbT += dt / 1.4;
+    if (z.climbT >= 1) {
+      z.climbing = false;
+      z.win = null; // drin — ab jetzt normale Jagd
+      z.pos.y = 0;
+      z.group.position.y = 0;
+    } else {
+      const t = z.climbT;
+      z.pos.lerpVectors(z.climbStart, z.climbEnd, t);
+      z.group.position.x = z.pos.x;
+      z.group.position.z = z.pos.z;
+      z.group.position.y = lerp(z.climbStart.y, 0, t) + Math.sin(t * Math.PI) * 1.35;
+      if (z.spineBone) z.spineBone.rotation.x = Math.sin(t * Math.PI) * 0.7;
+    }
+  }
+
+  if (!isAttackingWindow && !z.climbing && !z.win && zZone !== pZone && !z.isDog) {
+    const nz = nextZoneToward(zZone, pZone);
+    if (nz >= 0) {
+      const key = zZone < nz ? `${zZone},${nz}` : `${nz},${zZone}`;
+      const c = doorCenters[key];
+      if (c) { tx = c[0]; tz = c[1]; }
+    }
+  }
+
+  tmpV.set(tx - z.pos.x, 0, tz - z.pos.z);
+  const distToTarget = tmpV.length();
+  if (distToTarget > 0.01) tmpV.divideScalar(distToTarget);
+
+  const distToPlayer = Math.hypot(player.pos.x - z.pos.x, player.pos.z - z.pos.z);
+
+  if (!isAttackingWindow && !z.climbing && z.staggerT <= 0 && distToPlayer > 1.35) {
+    z.pos.addScaledVector(tmpV, z.speed * dt);
+    if (z.isBoss && Math.random() < 0.02 && distToPlayer < 10) shake = Math.min(1, shake + 0.15);
+  }
+
+  if (!z.climbing) {
+    // Abstoßung nur gegenüber Zombies in den 9 umliegenden Grid-Zellen
+    // statt gegenüber allen Zombies (siehe buildZombieGrid oben).
+    const gcx = Math.floor(z.pos.x / ZOMBIE_GRID_CELL), gcz = Math.floor(z.pos.z / ZOMBIE_GRID_CELL);
+    for (let gx = -1; gx <= 1; gx++) {
+      for (let gz = -1; gz <= 1; gz++) {
+        const bucket = zombieGrid.get((gcx + gx) + ',' + (gcz + gz));
+        if (!bucket) continue;
+        for (const o of bucket) {
+          if (o === z) continue;
+          const dx = z.pos.x - o.pos.x, dz = z.pos.z - o.pos.z;
+          const d2 = dx * dx + dz * dz;
+          if (d2 < 0.64 && d2 > 1e-6) {
+            const d = Math.sqrt(d2), push = (0.8 - d) * 0.5;
+            z.pos.x += dx / d * push * dt * 8;
+            z.pos.z += dz / d * push * dt * 8;
+          }
+        }
+      }
+    }
+
+    // Kollision & Map-Klemme nur drinnen — draußen laufen sie frei durch den Wald
+    if (inside && !z.win) resolveCollision(z.pos, 0.4);
+    z.group.position.x = z.pos.x;
+    z.group.position.z = z.pos.z;
+    if (!z.isCrawler || z.crawlAnim) {
+      z.group.position.y = inside ? 0 : terrainH(z.pos.x, z.pos.z);
+    }
+  }
+
+  // Box-Fallback-Animation (Hunde-Galopp / einfacher Zombie)
+  if (z.animParts) {
+    z.animT += dt * z.speed * 3.2;
+    const sw = Math.sin(z.animT);
+    if (z.animParts.legs) {
+      z.animParts.legs.forEach((leg, li) => {
+        leg.rotation.x = Math.sin(z.animT * 2 + li * Math.PI * 0.5) * 0.7;
+      });
+      z.group.position.y += Math.abs(Math.sin(z.animT * 2)) * 0.12;
+    } else if (z.animParts.legL) {
+      z.animParts.legL.rotation.x = sw * 0.7;
+      z.animParts.legR.rotation.x = -sw * 0.7;
+      z.animParts.armL.rotation.x = 0.15 + Math.sin(z.animT * 0.7) * 0.12;
+      z.animParts.armR.rotation.x = 0.15 - Math.sin(z.animT * 0.7) * 0.12;
+      z.group.position.y += Math.abs(sw) * 0.05;
+    }
+  }
+
+  // Angriff auf den Spieler: Ausfall-Animation, Schaden am Anschlag
+  if (!isAttackingWindow && !z.climbing) {
+    z.attackCd -= dt;
+    if (distToPlayer < 1.7 && z.attackCd <= 0 && z.hitDelay < 0) {
+      z.attackCd = z.isDog ? ZOMBIE_DEFS.dog.attackCooldown : (z.isBoss ? ZOMBIE_DEFS.boss.attackCooldown : ZOMBIE_DEFS.normal.attackCooldown);
+      z.hitDelay = 0.28;
+      z.lungeT = 0.34;
+      playAttack(z.pos.x, z.pos.z);
+      if (!z.isDog && z.actions) {
+        const moves = ['attack', 'bite', 'neckbite'].filter(a => z.actions[a]);
+        if (moves.length) {
+          z.playAnim(moves[Math.random() * moves.length | 0], 0.07);
+          z.attackAnimT = 0.85;
+        }
+      }
+    }
+  }
+  if (z.hitDelay >= 0) {
+    z.aiState = 'attack';
+    z.hitDelay -= dt;
+    if (z.hitDelay < 0) {
+      const d2p = Math.hypot(player.pos.x - z.pos.x, player.pos.z - z.pos.z);
+      if (d2p < 2.3) damagePlayer(z.isBoss ? ZOMBIE_DEFS.boss.damage : (z.isDog ? ZOMBIE_DEFS.dog.damage : ZOMBIE_DEFS.normal.damage), z.pos.x, z.pos.z);
+    }
+  }
+
+  // Ausfallschritt: Modell schnellt visuell zum Spieler vor
+  if (z.lungeT > 0) {
+    z.lungeT -= dt;
+    const lp = Math.sin((1 - z.lungeT / 0.34) * Math.PI);
+    z.group.position.x = z.pos.x + tmpV.x * lp * 0.4;
+    z.group.position.z = z.pos.z + tmpV.z * lp * 0.4;
+  }
+
+  // Animations-Zustandsmaschine (Mixamo)
+  if (z.actions && !z.climbing && !isAttackingWindow) {
+    if (z.attackAnimT > 0) z.attackAnimT -= dt;
+    else z.playAnim(z.crawlAnim ? 'crawlrun' : (z.isRunner || z.raged ? 'run' : 'walk'));
+  }
+
+  z.shadow.position.set(z.pos.x, z.group.position.y + 0.02, z.pos.z);
+}
+
 function updateZombies(dt) {
   const pZone = zoneAt(player.pos.x, player.pos.z);
+  buildZombieGrid();
 
   for (let i = zombies.length - 1; i >= 0; i--) {
     const z = zombies[i];
@@ -3519,170 +3723,13 @@ function updateZombies(dt) {
     const inside = zombieInside(z);
 
     if (z.state === 'rise') {
+      z.aiState = 'idle';
       z.riseT += dt;
       const ground = inside ? 0 : terrainH(z.pos.x, z.pos.z);
       z.group.position.y = ground - 1.9 + 1.9 * Math.min(1, z.riseT / 1.1);
       if (z.riseT >= 1.1) { z.state = 'chase'; z.group.position.y = ground; }
     } else {
-      const zZone = zoneAt(z.pos.x, z.pos.z);
-      let tx = player.pos.x, tz = player.pos.z;
-      let isAttackingWindow = false;
-
-      // Stagger: kurz taumeln statt laufen
-      if (z.staggerT > 0) z.staggerT -= dt;
-
-      if (!z.isDog && z.win && !z.climbing) {
-        let wx = z.win.pos.x, wz = z.win.pos.z;
-        const wd = Math.hypot(wx - z.pos.x, wz - z.pos.z);
-        if (z.win.boards > 0 && wd < 1.35) {
-          // An der Barrikade: Bretter abreißen
-          isAttackingWindow = true;
-          z.playAnim('attack', 0.12);
-          z.attackCd -= dt;
-          if (z.attackCd <= 0) {
-            z.win.boards--;
-            z.win.meshes[z.win.boards].visible = false;
-            z.attackCd = 1.5;
-            play3D('barricade_break_', wx, wz);
-            // Holzsplitter
-            for (let s = 0; s < 12; s++) {
-              spawnParticle(new THREE.Vector3(wx, 1.6, wz),
-                new THREE.Vector3(rand(-2, 2), rand(0.5, 3), rand(-2, 2)), 0x8a6a40, rand(0.3, 0.7));
-            }
-          }
-        } else if (z.win.boards > 0) {
-          tx = wx; tz = wz; // zum Fenster laufen
-        } else {
-          // Fenster offen → durchklettern
-          if (wd < 1.7) {
-            z.climbing = true;
-            z.climbT = 0;
-            z.climbStart = z.pos.clone();
-            z.climbStart.y = z.group.position.y;
-            z.climbEnd = new THREE.Vector3().copy(z.win.inner);
-            z.playAnim(z.actions && z.actions.crawl ? 'crawl' : 'walk', 0.15);
-          } else {
-            tx = wx; tz = wz;
-          }
-        }
-      }
-
-      if (z.climbing) {
-        z.climbT += dt / 1.4;
-        if (z.climbT >= 1) {
-          z.climbing = false;
-          z.win = null; // drin — ab jetzt normale Jagd
-          z.pos.y = 0;
-          z.group.position.y = 0;
-        } else {
-          const t = z.climbT;
-          z.pos.lerpVectors(z.climbStart, z.climbEnd, t);
-          z.group.position.x = z.pos.x;
-          z.group.position.z = z.pos.z;
-          z.group.position.y = lerp(z.climbStart.y, 0, t) + Math.sin(t * Math.PI) * 1.35;
-          if (z.spineBone) z.spineBone.rotation.x = Math.sin(t * Math.PI) * 0.7;
-        }
-      }
-
-      if (!isAttackingWindow && !z.climbing && !z.win && zZone !== pZone && !z.isDog) {
-        const nz = nextZoneToward(zZone, pZone);
-        if (nz >= 0) {
-          const key = zZone < nz ? `${zZone},${nz}` : `${nz},${zZone}`;
-          const c = doorCenters[key];
-          if (c) { tx = c[0]; tz = c[1]; }
-        }
-      }
-
-      tmpV.set(tx - z.pos.x, 0, tz - z.pos.z);
-      const distToTarget = tmpV.length();
-      if (distToTarget > 0.01) tmpV.divideScalar(distToTarget);
-
-      const distToPlayer = Math.hypot(player.pos.x - z.pos.x, player.pos.z - z.pos.z);
-
-      if (!isAttackingWindow && !z.climbing && z.staggerT <= 0 && distToPlayer > 1.35) {
-        z.pos.addScaledVector(tmpV, z.speed * dt);
-        if (z.isBoss && Math.random() < 0.02 && distToPlayer < 10) shake = Math.min(1, shake + 0.15);
-      }
-
-      if (!z.climbing) {
-        for (const o of zombies) {
-          if (o === z || o.state !== 'chase') continue;
-          const dx = z.pos.x - o.pos.x, dz = z.pos.z - o.pos.z;
-          const d2 = dx * dx + dz * dz;
-          if (d2 < 0.64 && d2 > 1e-6) {
-            const d = Math.sqrt(d2), push = (0.8 - d) * 0.5;
-            z.pos.x += dx / d * push * dt * 8;
-            z.pos.z += dz / d * push * dt * 8;
-          }
-        }
-
-        // Kollision & Map-Klemme nur drinnen — draußen laufen sie frei durch den Wald
-        if (inside && !z.win) resolveCollision(z.pos, 0.4);
-        z.group.position.x = z.pos.x;
-        z.group.position.z = z.pos.z;
-        if (!z.isCrawler || z.crawlAnim) {
-          z.group.position.y = inside ? 0 : terrainH(z.pos.x, z.pos.z);
-        }
-      }
-
-      // Box-Fallback-Animation (Hunde-Galopp / einfacher Zombie)
-      if (z.animParts) {
-        z.animT += dt * z.speed * 3.2;
-        const sw = Math.sin(z.animT);
-        if (z.animParts.legs) {
-          z.animParts.legs.forEach((leg, li) => {
-            leg.rotation.x = Math.sin(z.animT * 2 + li * Math.PI * 0.5) * 0.7;
-          });
-          z.group.position.y += Math.abs(Math.sin(z.animT * 2)) * 0.12;
-        } else if (z.animParts.legL) {
-          z.animParts.legL.rotation.x = sw * 0.7;
-          z.animParts.legR.rotation.x = -sw * 0.7;
-          z.animParts.armL.rotation.x = 0.15 + Math.sin(z.animT * 0.7) * 0.12;
-          z.animParts.armR.rotation.x = 0.15 - Math.sin(z.animT * 0.7) * 0.12;
-          z.group.position.y += Math.abs(sw) * 0.05;
-        }
-      }
-
-      // Angriff auf den Spieler: Ausfall-Animation, Schaden am Anschlag
-      if (!isAttackingWindow && !z.climbing) {
-        z.attackCd -= dt;
-        if (distToPlayer < 1.7 && z.attackCd <= 0 && z.hitDelay < 0) {
-          z.attackCd = z.isDog ? ZOMBIE_DEFS.dog.attackCooldown : (z.isBoss ? ZOMBIE_DEFS.boss.attackCooldown : ZOMBIE_DEFS.normal.attackCooldown);
-          z.hitDelay = 0.28;
-          z.lungeT = 0.34;
-          playAttack(z.pos.x, z.pos.z);
-          if (!z.isDog && z.actions) {
-            const moves = ['attack', 'bite', 'neckbite'].filter(a => z.actions[a]);
-            if (moves.length) {
-              z.playAnim(moves[Math.random() * moves.length | 0], 0.07);
-              z.attackAnimT = 0.85;
-            }
-          }
-        }
-      }
-      if (z.hitDelay >= 0) {
-        z.hitDelay -= dt;
-        if (z.hitDelay < 0) {
-          const d2p = Math.hypot(player.pos.x - z.pos.x, player.pos.z - z.pos.z);
-          if (d2p < 2.3) damagePlayer(z.isBoss ? ZOMBIE_DEFS.boss.damage : (z.isDog ? ZOMBIE_DEFS.dog.damage : ZOMBIE_DEFS.normal.damage), z.pos.x, z.pos.z);
-        }
-      }
-
-      // Ausfallschritt: Modell schnellt visuell zum Spieler vor
-      if (z.lungeT > 0) {
-        z.lungeT -= dt;
-        const lp = Math.sin((1 - z.lungeT / 0.34) * Math.PI);
-        z.group.position.x = z.pos.x + tmpV.x * lp * 0.4;
-        z.group.position.z = z.pos.z + tmpV.z * lp * 0.4;
-      }
-
-      // Animations-Zustandsmaschine (Mixamo)
-      if (z.actions && !z.climbing && !isAttackingWindow) {
-        if (z.attackAnimT > 0) z.attackAnimT -= dt;
-        else z.playAnim(z.crawlAnim ? 'crawlrun' : (z.isRunner || z.raged ? 'run' : 'walk'));
-      }
-
-      z.shadow.position.set(z.pos.x, z.group.position.y + 0.02, z.pos.z);
+      updateZombieFSM(z, dt, pZone, inside);
     }
 
     z.group.rotation.y = Math.atan2(player.pos.x - z.pos.x, player.pos.z - z.pos.z) + FACING;
