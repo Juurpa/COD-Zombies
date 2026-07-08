@@ -33,6 +33,28 @@ kein natives Multithreading, kein natives NavMesh/RVO2).
 - [ ] Animation-Blending: Übergangszeiten zwischen walk/run/attack in THREE
       AnimationMixer saubern (crossFadeTo), Root-Motion nur falls die GLB-
       Animationen das hergeben — sonst wie bisher Positions-Update per Code.
+- [x] Bewegung glätten: Zombies drehen ihre Bewegungsrichtung jetzt
+      Turn-Rate-limitiert (`z.moveDir`, `ZOMBIE_TURN_RATE = 6 rad/s`) statt
+      sie jeden Frame hart auf die Zielrichtung springen zu lassen — kein
+      ruckartiges Umschwenken mehr bei abrupten Zielwechseln
+      (Fenster ↔ Spieler ↔ Tür-Routing). Separation (siehe Punkt oben)
+      war schon vorhanden, dabei verifiziert: bei 20 künstlich geclusterten
+      Zombies bleibt ein Mindestabstand von ~0.58m (Radius-Ziel: 0.8m),
+      kein Ineinanderlaufen.
+- [ ] **Generische Wand-Kollision (neu, aus map2-Test entstanden):**
+      `resolveCollision()` selbst ist bereits generisch (eine simple Liste
+      von AABB-Boxen, quellenunabhängig) — behoben wurde hier nur, dass ihr
+      äußerer Grenz-Clamp und `zombieInside()` hartcodierte map1-Koordinaten
+      waren (jetzt `ACTIVE_MAP.moveBounds`/`insideBounds`, siehe Phase 7).
+      Was fehlt: auf map2 gibt es noch keine einzelnen Wand-Collider —
+      Spieler/Zombies können durch die Innenwände des GLB-Modells laufen,
+      nur die äußere Karten-Grenze hält sie auf der Karte. Eine echte Lösung
+      bräuchte entweder automatisch aus der Mesh-Geometrie erzeugte
+      AABB-Collider (analog zu `addBoxCollider()`, aber pro Mesh/Cluster —
+      bei 590 Meshes muss das sinnvoll vereinfacht werden, nicht 1:1) oder
+      Raycasting gegen die Modell-Geometrie zur Laufzeit. Beides nicht in
+      diesem Schritt umgesetzt (zu groß für einen Sofortfix), siehe auch
+      die map2-spezifischen offenen Punkte in Phase 7.
 
 ## Phase 3 — Gunplay / Game Feel
 - [ ] Recoil-Pattern pro Waffe: feste Sequenz von Kamera-Offsets in
@@ -137,8 +159,38 @@ generalisiert werden (aktuell fest im Code verdrahtet, nicht austauschbar).
       prozedural aus Code gebaut wird — Wände/Boden/Texturen sind
       bewusst nicht mit-extrahiert, das wäre kein reines Refactoring
       mehr.)
-- [ ] Zweite Map als auswählbare Option integrieren, ohne die bestehende
+- [x] Zweite Map als auswählbare Option integrieren, ohne die bestehende
       Map zu verändern/kaputt zu machen.
+      (`data/maps/map2.json`, ausdrücklich als vorläufig markiert —
+      Spawner/Wallbuys/Lichter sind grobe, mittig geclusterte Schätzungen,
+      nicht aus echter Level-Analyse der ~300×227 Einheiten großen Karte.
+      Umschaltung bisher nur per `window.__debug.setMap('map1'|'map2')`
+      + Reload, noch kein UI — kommt mit dem Lobby-Screen. map1 läuft
+      dabei unverändert weiter: die komplette prozedurale Bunker-Geometrie
+      wird für map1 exakt wie vorher gebaut; für map2 wird sie zusätzlich
+      gebaut, aber danach ausgeblendet und ihre Kollisions-/Interaktions-
+      Daten geleert — kostet auf map2 unnötig Ladezeit, siehe unten.
+      Ladezeit gemessen: map1 ~1.1s, map2 ~1.36s frischer Start — die
+      80MB-Modelldatei macht sich also nur um ~250ms bemerkbar, kein
+      spürbares Problem.)
+      **Bekannte offene Punkte für map2** (bewusst nicht in diesem Schritt
+      gelöst, siehe unten "Generische Kollision"):
+      - Wand-Kollision fehlt komplett (nur die äußere Bounding-Box hält
+        Spieler/Zombies auf der Karte, Wände selbst sind nicht blockierend).
+      - Boden ist nur an der Spieler-Startposition per Raycast ausgerichtet;
+        die Karte hat ~36 Einheiten Höhenunterschied, abseits davon können
+        Akteure über/unter der sichtbaren Geometrie stehen.
+      - `GLTFLoader: Couldn't load texture blob:...`-Warnungen beim Laden
+        des map2-Modells (mehrfach) — Ursache noch nicht untersucht,
+        vermutlich ein Textur-/Bildformat im GLB, das nicht sauber
+        dekodiert wird. Funktional nicht blockierend (Modell lädt und
+        rendert), aber optisch ggf. betroffene Flächen ohne Textur.
+      - Dog-Runden-Teleport-Spawn (`spawnZombie()`) nutzt weiterhin
+        hartcodierte map1-Grenzen (-18/58) statt `ACTIVE_MAP.moveBounds` —
+        auf map2 fällt der Hund dadurch meist auf "direkt beim Spieler
+        spawnen" zurück statt einen zufälligen Punkt in der Nähe zu finden.
+      - Spawner/Wallbuys/Lichter decken nur einen kleinen, mittigen
+        Ausschnitt der sehr großen Karte ab.
 - [ ] Lobby-Screen vor Rundenstart (neuer UI-Zustand vor `startRound(1)`):
       Map-Auswahl, Perk-Auswahl (Grundlage: Phase 6 Perks-Punkt), Start-
       Waffen-Auswahl.
