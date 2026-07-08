@@ -21,6 +21,38 @@ const lerp = (a, b, t) => a + (b - a) * t;
 const rand = (a, b) => a + Math.random() * (b - a);
 const $ = id => document.getElementById(id);
 
+// ---------------- Datengesteuerte Konfiguration ----------------
+// Lädt data/<name>.json synchron (Node-Integration im Renderer) und liefert
+// dessen Inhalt, oder null falls die Datei fehlt/kaputt ist. Aufrufer müssen
+// in diesem Fall auf ihre eingebauten Standardwerte zurückfallen — das Spiel
+// darf dadurch nie abstürzen.
+function loadGameData(name) {
+  try {
+    const fs = require('fs');
+    const path = require('path');
+    const raw = fs.readFileSync(path.join(__dirname, 'data', name), 'utf-8');
+    return JSON.parse(raw);
+  } catch (e) {
+    console.warn(`[UNTOT] data/${name} konnte nicht geladen werden, nutze eingebaute Standardwerte:`, e.message);
+    return null;
+  }
+}
+// Tiefes Überschreiben von Default-Werten mit geladenen Daten, ohne die
+// Struktur zu verlieren falls im JSON ein Feld fehlt.
+function applyDataOverrides(defaults, loaded) {
+  if (!loaded) return defaults;
+  for (const key of Object.keys(defaults)) {
+    if (!(key in loaded)) continue;
+    const def = defaults[key], val = loaded[key];
+    if (def && typeof def === 'object' && !Array.isArray(def) && val && typeof val === 'object') {
+      applyDataOverrides(def, val);
+    } else {
+      defaults[key] = val;
+    }
+  }
+  return defaults;
+}
+
 // ---------------- UI ----------------
 const ui = {
   hud: $('hud'), menu: $('menu'), pause: $('pause'), gameover: $('gameover'),
@@ -1009,6 +1041,8 @@ for (const s of spawners) {
 }
 
 // ---------------- Waffen ----------------
+// Eingebaute Standardwerte — greifen, falls data/weapons.json fehlt oder
+// fehlerhaft ist (siehe loadGameData/applyDataOverrides oben).
 const WEAPON_DEFS = {
   pistol:  { name: '.38er Revolver',  dmg: 55,  head: 2.5, rate: 0.3,   mag: 6,  reserve: 60,  auto: false, pellets: 1, spread: 0.006, reload: 1.5 },
   smg:     { name: 'PP-19 Bizon',    dmg: 35,  head: 2.0, rate: 0.075, mag: 64, reserve: 192, auto: true,  pellets: 1, spread: 0.028, reload: 2.2, cost: 1250 },
@@ -1018,6 +1052,7 @@ const WEAPON_DEFS = {
   mg42:    { name: 'MG-42',          dmg: 40,  head: 1.8, rate: 0.06,  mag: 75, reserve: 300, auto: true,  pellets: 1, spread: 0.035, reload: 3.5 },
   raygun:  { name: 'Strahlenkanone', dmg: 420, head: 1.5, rate: 0.4,   mag: 20, reserve: 160, auto: false, pellets: 1, spread: 0.004, reload: 1.8, energy: true },
 };
+applyDataOverrides(WEAPON_DEFS, loadGameData('weapons.json'));
 const MYSTERY_POOL = [['smg', 16], ['shotgun', 16], ['rifle', 16], ['magnum', 18], ['mg42', 16], ['raygun', 12]];
 const WEAPON_COLORS = { smg: 0x4a4e58, shotgun: 0x6a5240, rifle: 0x5a5348, magnum: 0x777c88, mg42: 0x3a3e46, raygun: 0xbb2222, pistol: 0x7a7f8a };
 
@@ -2089,14 +2124,41 @@ function zombieHp(round) {
   return hp;
 }
 
+// Eingebaute Standardwerte für Zombie-Stats — greifen, falls
+// data/zombies.json fehlt oder fehlerhaft ist.
+const ZOMBIE_DEFS = {
+  normal: {
+    health: { round1: 150, perRoundIncrement: 100, lateGameStartRound: 9, lateGameBase: 950, lateGameGrowth: 1.1 },
+    speed: { min: 1.15, max: 1.6, perRound: 0.045, cap: 2.3 },
+    runnerSpeed: { min: 3.15, max: 3.85 },
+    runnerChance: { base: 0.05, perRound: 0.06, max: 0.65 },
+    damage: 22,
+    attackCooldown: 1.15,
+  },
+  dog: {
+    health: { base: 60, perRound: 10 },
+    speed: { min: 6.0, max: 7.5 },
+    damage: 22,
+    attackCooldown: 1.0,
+  },
+  boss: {
+    healthMultiplier: 6,
+    speed: { min: 1.4, max: 1.7 },
+    damage: 45,
+    attackCooldown: 1.15,
+  },
+};
+applyDataOverrides(ZOMBIE_DEFS, loadGameData('zombies.json'));
+
 function getZombieHealth(round) {
-  if (round === 1) return 150;
-  if (round <= 9) return 150 + (round - 1) * 100;
-  return 950 * Math.pow(1.1, round - 9);
+  const h = ZOMBIE_DEFS.normal.health;
+  if (round === 1) return h.round1;
+  if (round <= h.lateGameStartRound) return h.round1 + (round - 1) * h.perRoundIncrement;
+  return h.lateGameBase * Math.pow(h.lateGameGrowth, round - h.lateGameStartRound);
 }
 
 function getZombieSpeed(round, isDog) {
-  if (isDog) return 6.0;
+  if (isDog) return ZOMBIE_DEFS.dog.speed.min;
   return 1.4 + (round * 0.05);
 }
 
@@ -2113,12 +2175,14 @@ function spawnZombie() {
   const isDog = state.dogRound;
   const isBoss = !isDog && state.bossPending;
   if (isBoss) state.bossPending = false;
-  const runnerChance = clamp(0.05 + state.round * 0.06, 0, 0.65);
+  const rc = ZOMBIE_DEFS.normal.runnerChance;
+  const runnerChance = clamp(rc.base + state.round * rc.perRound, 0, rc.max);
   const isRunner = isDog ? true : (!isBoss && Math.random() < runnerChance);
   // Leicht reduziertes Tempo gegenüber früher (bessere Lesbarkeit im Kampf)
-  const speed = isDog ? rand(6.0, 7.5)
-    : isBoss ? rand(1.4, 1.7)
-    : (isRunner ? rand(3.15, 3.85) : Math.min(2.3, rand(1.15, 1.6) + state.round * 0.045));
+  const nSpeed = ZOMBIE_DEFS.normal.speed, rSpeed = ZOMBIE_DEFS.normal.runnerSpeed;
+  const speed = isDog ? rand(ZOMBIE_DEFS.dog.speed.min, ZOMBIE_DEFS.dog.speed.max)
+    : isBoss ? rand(ZOMBIE_DEFS.boss.speed.min, ZOMBIE_DEFS.boss.speed.max)
+    : (isRunner ? rand(rSpeed.min, rSpeed.max) : Math.min(nSpeed.cap, rand(nSpeed.min, nSpeed.max) + state.round * nSpeed.perRound));
 
   // Hunde teleportieren sich in Spielernähe in die Karte (Blitz + Glut)
   let pos;
@@ -2157,7 +2221,8 @@ function spawnZombie() {
   const z = { isBoss, isDog, group, model: visual.model, mixer: visual.mixer || null, actions: visual.actions || null,
     headBone: visual.headBone || null, spineBone: visual.spineBone || null,
     animParts: visual.animParts || null, mats: visual.mats || [],
-    hp: isDog ? 60 + state.round * 10 : getZombieHealth(state.round) * (isBoss ? 6 : 1),
+    hp: isDog ? ZOMBIE_DEFS.dog.health.base + state.round * ZOMBIE_DEFS.dog.health.perRound
+      : getZombieHealth(state.round) * (isBoss ? ZOMBIE_DEFS.boss.healthMultiplier : 1),
     speed, isRunner, isCrawler: false,
     state: isDog ? 'chase' : 'rise', riseT: 0, deadT: 0, flashT: 0, flashOn: false,
     attackCd: rand(0, 0.5), animT: rand(0, 10), pos: new THREE.Vector3().copy(pos),
@@ -3582,7 +3647,7 @@ function updateZombies(dt) {
       if (!isAttackingWindow && !z.climbing) {
         z.attackCd -= dt;
         if (distToPlayer < 1.7 && z.attackCd <= 0 && z.hitDelay < 0) {
-          z.attackCd = z.isDog ? 1.0 : 1.15;
+          z.attackCd = z.isDog ? ZOMBIE_DEFS.dog.attackCooldown : (z.isBoss ? ZOMBIE_DEFS.boss.attackCooldown : ZOMBIE_DEFS.normal.attackCooldown);
           z.hitDelay = 0.28;
           z.lungeT = 0.34;
           playAttack(z.pos.x, z.pos.z);
@@ -3599,7 +3664,7 @@ function updateZombies(dt) {
         z.hitDelay -= dt;
         if (z.hitDelay < 0) {
           const d2p = Math.hypot(player.pos.x - z.pos.x, player.pos.z - z.pos.z);
-          if (d2p < 2.3) damagePlayer(z.isBoss ? 45 : 22, z.pos.x, z.pos.z);
+          if (d2p < 2.3) damagePlayer(z.isBoss ? ZOMBIE_DEFS.boss.damage : (z.isDog ? ZOMBIE_DEFS.dog.damage : ZOMBIE_DEFS.normal.damage), z.pos.x, z.pos.z);
         }
       }
 

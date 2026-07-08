@@ -1,0 +1,28 @@
+{
+  "normal": {
+    "health": {
+      "round1": 150,
+      "perRoundIncrement": 100,
+      "lateGameStartRound": 9,
+      "lateGameBase": 950,
+      "lateGameGrowth": 1.1
+    },
+    "speed": { "min": 1.15, "max": 1.6, "perRound": 0.045, "cap": 2.3 },
+    "runnerSpeed": { "min": 3.15, "max": 3.85 },
+    "runnerChance": { "base": 0.05, "perRound": 0.06, "max": 0.65 },
+    "damage": 22,
+    "attackCooldown": 1.15
+  },
+  "dog": {
+    "health": { "base": 60, "perRound": 10 },
+    "speed": { "min": 6.0, "max": 7.5 },
+    "damage": 22,
+    "attackCooldown": 1.0
+  },
+  "boss": {
+    "healthMultiplier": 6,
+    "speed": { "min": 1.4, "max": 1.7 },
+    "damage": 45,
+    "attackCooldown": 1.15
+  }
+}

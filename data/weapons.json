@@ -1,0 +1,90 @@
+{
+  "pistol": {
+    "name": ".38er Revolver",
+    "dmg": 55,
+    "head": 2.5,
+    "rate": 0.3,
+    "mag": 6,
+    "reserve": 60,
+    "auto": false,
+    "pellets": 1,
+    "spread": 0.006,
+    "reload": 1.5
+  },
+  "smg": {
+    "name": "PP-19 Bizon",
+    "dmg": 35,
+    "head": 2.0,
+    "rate": 0.075,
+    "mag": 64,
+    "reserve": 192,
+    "auto": true,
+    "pellets": 1,
+    "spread": 0.028,
+    "reload": 2.2,
+    "cost": 1250
+  },
+  "shotgun": {
+    "name": "Grabenflinte",
+    "dmg": 24,
+    "head": 1.5,
+    "rate": 0.95,
+    "mag": 6,
+    "reserve": 60,
+    "auto": false,
+    "pellets": 8,
+    "spread": 0.07,
+    "reload": 2.4,
+    "cost": 1500
+  },
+  "rifle": {
+    "name": "AK-47",
+    "dmg": 65,
+    "head": 2.2,
+    "rate": 0.11,
+    "mag": 30,
+    "reserve": 180,
+    "auto": true,
+    "pellets": 1,
+    "spread": 0.016,
+    "reload": 2.0,
+    "cost": 2000
+  },
+  "magnum": {
+    "name": "Magnum .357",
+    "dmg": 130,
+    "head": 3.0,
+    "rate": 0.42,
+    "mag": 6,
+    "reserve": 48,
+    "auto": false,
+    "pellets": 1,
+    "spread": 0.006,
+    "reload": 2.2
+  },
+  "mg42": {
+    "name": "MG-42",
+    "dmg": 40,
+    "head": 1.8,
+    "rate": 0.06,
+    "mag": 75,
+    "reserve": 300,
+    "auto": true,
+    "pellets": 1,
+    "spread": 0.035,
+    "reload": 3.5
+  },
+  "raygun": {
+    "name": "Strahlenkanone",
+    "dmg": 420,
+    "head": 1.5,
+    "rate": 0.4,
+    "mag": 20,
+    "reserve": 160,
+    "auto": false,
+    "pellets": 1,
+    "spread": 0.004,
+    "reload": 1.8,
+    "energy": true
+  }
+}
