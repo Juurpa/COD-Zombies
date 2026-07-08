@@ -27,3 +27,18 @@
 - Performance bei vielen Zombies (>20) kann bei O(n²)-Abstoßungscheck
   in updateZombies() und Echtzeit-Schatten einbrechen — mögliche
   Optimierung: Spatial-Grid bzw. LOD für weit entfernte Zombies.
+
+## Merge aus "Game Test" (Kollegen-Fork, siehe MERGE_ANALYSIS.md / MERGE_PLAN.md)
+
+### Fixed
+- Zombie-Frustum-Culling (Schritt 1 aus MERGE_PLAN.md): Zombie-Meshes
+  hatten `frustumCulled = false`, weil die Standard-Bounding-Box eines
+  Skinned Mesh bei Animation nicht mitwächst — dadurch wurde jeder
+  Zombie jeden Frame gerendert, auch außerhalb des Sichtfelds. Jetzt
+  wird stattdessen einmalig eine Bounding-Sphere berechnet und ihr
+  Radius künstlich um Faktor 1.5 vergrößert, Culling bleibt aktiv
+  (`frustumCulled = true`). Übernommen aus Game-Test-Commit
+  `eb91225` ("Zombies frustumCulling fix for 90 FPS").
+  Verifiziert: Zombies, die tatsächlich im Sichtfeld stehen, rendern
+  weiterhin korrekt (Screenshot-Test mit 12 Zombies in Kamerasicht,
+  keine fälschlich verschwundenen Meshes).

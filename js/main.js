@@ -2183,7 +2183,15 @@ function makeZombieVisual(isDog, isBoss) {
       c.material.color.multiply(tint);
       if (c.material.roughness !== undefined) c.material.roughness = 0.85;
       if (c.material.envMapIntensity !== undefined) c.material.envMapIntensity = 0.15;
-      c.frustumCulled = false; // Skinned Mesh: Bounding-Box stimmt bei Animation nicht
+      // Skinned Mesh: Standard-Bounding-Box wächst bei Animation nicht mit.
+      // Statt Culling komplett abzuschalten (rendert dann jeden Zombie
+      // immer, auch außerhalb des Sichtfelds): Bounding-Sphere einmalig
+      // berechnen und künstlich vergrößern, damit sie animierte Posen
+      // sicher abdeckt, Culling aber aktiv bleibt (spart Draw-Calls für
+      // Zombies außerhalb der Kamera).
+      if (!c.geometry.boundingSphere) c.geometry.computeBoundingSphere();
+      c.geometry.boundingSphere.radius *= 1.5;
+      c.frustumCulled = true;
       mats.push(c.material);
     }
   });
