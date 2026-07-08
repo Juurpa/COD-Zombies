@@ -1,0 +1,30 @@
+{
+  "name": "Bunker (Original)",
+  "model": null,
+  "spawners": [
+    { "x": -40, "z": 0, "zone": 0 },
+    { "x": 0, "z": 40, "zone": 0 },
+    { "x": 80, "z": 0, "zone": 1 },
+    { "x": 40, "z": 40, "zone": 1 },
+    { "x": 0, "z": -80, "zone": 2 },
+    { "x": -40, "z": -40, "zone": 2 },
+    { "x": 80, "z": -40, "zone": 3 },
+    { "x": 40, "z": -80, "zone": 3 }
+  ],
+  "zoneLights": [
+    { "x": 0, "z": 0, "color": "#ff8833", "intensity": 90, "shadowCapable": true },
+    { "x": 40, "z": 0, "color": "#44aaff", "intensity": 100, "shadowCapable": true },
+    { "x": 0, "z": -40, "color": "#33ff66", "intensity": 85, "shadowCapable": true },
+    { "x": 40, "z": -40, "color": "#ff2222", "intensity": 110, "shadowCapable": true },
+    { "x": -10, "z": 10, "color": "#ff8833", "intensity": 40, "shadowCapable": false },
+    { "x": 50, "z": -10, "color": "#44aaff", "intensity": 40, "shadowCapable": false },
+    { "x": -10, "z": -50, "color": "#33ff66", "intensity": 35, "shadowCapable": false },
+    { "x": 50, "z": -30, "color": "#ff2222", "intensity": 45, "shadowCapable": false }
+  ],
+  "wallBuys": [
+    { "weapon": "smg", "x": 59.2, "z": 0, "ry": -1.5707963267948966 },
+    { "weapon": "shotgun", "x": -8, "z": -59.2, "ry": 0 },
+    { "weapon": "rifle", "x": 59.2, "z": -48, "ry": -1.5707963267948966 }
+  ],
+  "grenadeBuy": { "x": 19.45, "z": 12, "ry": -1.5707963267948966, "cost": 250 }
+}

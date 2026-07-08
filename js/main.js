@@ -208,18 +208,44 @@ function roomLight(x, z, color = 0xffb27a, intensity = 160, shadowCapable = true
   volumeCones.push(cone);
   return l;
 }
-// Lampen in den Raumzentren der 80×80-Map + je eine Zweitlampe pro Raum
-// (nur die 4 Hauptlampen werfen Schatten — mehr kostet zu viel Leistung)
-const lights = [
-  roomLight(0, 0, 0xff8833, 90),            // Zone 0 - Start (Warm Orange)
-  roomLight(40, 0, 0x44aaff, 100),          // Zone 1 - Speed-Cola (Cold Neon Blue)
-  roomLight(0, -40, 0x33ff66, 85),          // Zone 2 - Juggernog (Toxic Green)
-  roomLight(40, -40, 0xff2222, 110),        // Zone 3 - Pack-a-Punch (Emergency Alarm Red)
-  roomLight(-10, 10, 0xff8833, 40, false),
-  roomLight(50, -10, 0x44aaff, 40, false),
-  roomLight(-10, -50, 0x33ff66, 35, false),
-  roomLight(50, -30, 0xff2222, 45, false),
-];
+// ---------------- Map-Konfiguration (data/maps/*.json) ----------------
+// Eingebaute Standardwerte für die aktuelle (prozedural gebaute) Map —
+// greifen, falls data/maps/map1.json fehlt oder fehlerhaft ist.
+// "model: null" markiert, dass diese Map kein 3D-Modell lädt, sondern
+// komplett aus Code (Wände/Boden/Texturen weiter unten) aufgebaut wird —
+// im Gegensatz zu zukünftigen Maps mit "model": "assets/maps/<name>/....glb".
+const MAP1_DEFS = {
+  name: 'Bunker (Original)',
+  model: null,
+  spawners: [
+    { x: -40, z: 0, zone: 0 }, { x: 0, z: 40, zone: 0 },
+    { x: 80, z: 0, zone: 1 }, { x: 40, z: 40, zone: 1 },
+    { x: 0, z: -80, zone: 2 }, { x: -40, z: -40, zone: 2 },
+    { x: 80, z: -40, zone: 3 }, { x: 40, z: -80, zone: 3 },
+  ],
+  // Lampen in den Raumzentren der 80×80-Map + je eine Zweitlampe pro Raum
+  // (nur die 4 Hauptlampen werfen Schatten — mehr kostet zu viel Leistung)
+  zoneLights: [
+    { x: 0, z: 0, color: '#ff8833', intensity: 90, shadowCapable: true },    // Zone 0 - Start (Warm Orange)
+    { x: 40, z: 0, color: '#44aaff', intensity: 100, shadowCapable: true },  // Zone 1 - Speed-Cola (Cold Neon Blue)
+    { x: 0, z: -40, color: '#33ff66', intensity: 85, shadowCapable: true },  // Zone 2 - Juggernog (Toxic Green)
+    { x: 40, z: -40, color: '#ff2222', intensity: 110, shadowCapable: true },// Zone 3 - Pack-a-Punch (Emergency Alarm Red)
+    { x: -10, z: 10, color: '#ff8833', intensity: 40, shadowCapable: false },
+    { x: 50, z: -10, color: '#44aaff', intensity: 40, shadowCapable: false },
+    { x: -10, z: -50, color: '#33ff66', intensity: 35, shadowCapable: false },
+    { x: 50, z: -30, color: '#ff2222', intensity: 45, shadowCapable: false },
+  ],
+  wallBuys: [
+    { weapon: 'smg', x: 59.2, z: 0, ry: -1.5707963267948966 },
+    { weapon: 'shotgun', x: -8, z: -59.2, ry: 0 },
+    { weapon: 'rifle', x: 59.2, z: -48, ry: -1.5707963267948966 },
+  ],
+  grenadeBuy: { x: 19.45, z: 12, ry: -1.5707963267948966, cost: 250 },
+};
+applyDataOverrides(MAP1_DEFS, loadGameData('maps/map1.json'));
+function hexColor(str) { return parseInt(str.replace('#', ''), 16); }
+
+const lights = MAP1_DEFS.zoneLights.map(l => roomLight(l.x, l.z, hexColor(l.color), l.intensity, l.shadowCapable));
 const flickerLight = lights[2];
 
 // ---------------- Prozedurale Texturen ----------------
@@ -1027,12 +1053,7 @@ fakeWindow(0, -59.68, 0); fakeWindow(-19.68, -40, Math.PI / 2);
 fakeWindow(59.68, -40, -Math.PI / 2); fakeWindow(40, -59.68, 0);
 
 // Spawners (Deep in the forest now)
-const spawners = [
-  { x: -40, z: 0, zone: 0 }, { x: 0, z: 40, zone: 0 },
-  { x: 80, z: 0, zone: 1 }, { x: 40, z: 40, zone: 1 },
-  { x: 0, z: -80, zone: 2 }, { x: -40, z: -40, zone: 2 },
-  { x: 80, z: -40, zone: 3 }, { x: 40, z: -80, zone: 3 },
-];
+const spawners = MAP1_DEFS.spawners;
 const dirtMat = new THREE.MeshStandardMaterial({ color: 0x1c150e, roughness: 1 });
 for (const s of spawners) {
   const d = new THREE.Mesh(new THREE.CylinderGeometry(1.3, 1.6, 0.16, 10), dirtMat);
@@ -2885,12 +2906,11 @@ function wallBuy(key, x, z, ry) {
     },
   });
 }
-wallBuy('smg', 59.2, 0, -Math.PI / 2);
-wallBuy('shotgun', -8, -59.2, 0);
-wallBuy('rifle', 59.2, -48, -Math.PI / 2);
+for (const wb of MAP1_DEFS.wallBuys) wallBuy(wb.weapon, wb.x, wb.z, wb.ry);
 
 // Granaten-Wandkauf (Zone 0)
 {
+  const gb = MAP1_DEFS.grenadeBuy;
   const holder = new THREE.Group();
   const plaque = new THREE.Mesh(new THREE.PlaneGeometry(0.8, 0.6), new THREE.MeshLambertMaterial({ color: 0x3a3630 }));
   holder.add(plaque);
@@ -2900,17 +2920,17 @@ wallBuy('rifle', 59.2, -48, -Math.PI / 2);
     gm.scale.setScalar(1.3);
     holder.add(gm);
   }
-  holder.position.set(19.45, 1.5, 12);
-  holder.rotation.y = -Math.PI / 2;
+  holder.position.set(gb.x, 1.5, gb.z);
+  holder.rotation.y = gb.ry;
   scene.add(holder);
   interactables.push({
-    pos: new THREE.Vector3(19.45, 1.2, 12), radius: 2.4,
-    label: () => 'Granaten auffüllen — 250 Punkte',
+    pos: new THREE.Vector3(gb.x, 1.2, gb.z), radius: 2.4,
+    label: () => `Granaten auffüllen — ${gb.cost} Punkte`,
     available: () => true,
     action: () => {
       if (player.grenades >= 4) { denyPrompt(); return; }
-      if (state.points < 250) { denyPrompt(); return; }
-      state.points -= 250;
+      if (state.points < gb.cost) { denyPrompt(); return; }
+      state.points -= gb.cost;
       player.grenades = 4;
       sfx.buy();
     },
