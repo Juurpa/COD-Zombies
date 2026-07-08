@@ -57,8 +57,10 @@ kein natives Multithreading, kein natives NavMesh/RVO2).
       Angriffscooldowns, Spawn-Rate für Verstärkung).
 
 ## Phase 5 — Performance (verweist auf CHANGELOG.md)
-- [ ] Spatial-Grid für Zombie-Abstoßung/Nachbarsuche (löst das dort schon
-      dokumentierte O(n²)-Problem in updateZombies()).
+- [x] Spatial-Grid für Zombie-Abstoßung/Nachbarsuche (löst das dort schon
+      dokumentierte O(n²)-Problem in updateZombies()). Umgesetzt im Rahmen
+      von Phase 2 (siehe dort) — bei aktuellem Zombie-Limit (24) kein
+      messbarer FPS-Gewinn, Engpass liegt bei Schatten/Postprocessing.
 - [ ] Schatten-Update-Frequenz drosseln (nicht jeden Frame neu berechnen).
 - [ ] LOD: Animation-Update-Rate für weit entfernte Zombies reduzieren.
 - [ ] Optional: rechenintensive KI-Entscheidungen (Pathfinding-Requests) in
