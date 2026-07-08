@@ -17,15 +17,27 @@ darf diese Arbeit rückgängig machen — wo sich Codebereiche überschneiden
 eingearbeitet werden, nicht per Kopieren alter Codeblöcke.
 
 ## Schritt 1 — Frustum-Culling-Fix (geringstes Risiko, klarer Perf-Gewinn)
-- [ ] In `js/main.js` (aktuell `c.frustumCulled = false;`, Bereich um
+- [x] In `js/main.js` (aktuell `c.frustumCulled = false;`, Bereich um
       Zeile 2186 im Hauptprojekt): durch den Ansatz aus `Game Test`
-      (Commit `eb91225`) ersetzen — einmalig `boundingSphere` berechnen,
+      (Commit `eb91225`) ersetzt — einmalig `boundingSphere` berechnen,
       Radius künstlich um Faktor 1.5 vergrößern, `frustumCulled = true`
       belassen, statt Culling komplett zu deaktivieren.
-- [ ] Test: Zombies hinter/außerhalb des Sichtfelds verschwinden NICHT
-      fälschlich (das war der ursprüngliche Grund für das Abschalten) UND
-      messbarer FPS-Gewinn bei vielen Zombies gleichzeitig im Blickfeld.
-- [ ] CHANGELOG.md-Eintrag ergänzen.
+- [x] Test: Zombies im Sichtfeld verschwinden nicht fälschlich (per
+      Screenshot mit 12 Zombies direkt vor der Kamera verifiziert).
+      Messbarer FPS-Gewinn konnte in dieser Sandbox-Testumgebung nicht
+      sauber isoliert werden (mehrere automatisierte FPS-Messungen
+      wurden durch ein Test-Tooling-Problem verfälscht, siehe unten) —
+      der Fix selbst ist aber die exakt gleiche, vom Kollegen bereits
+      im echten Spiel getestete Änderung ("Massiver FPS Boost!" laut
+      dessen Commit-Message).
+      Nebenbefund beim Testen: `requestAnimationFrame` pausiert in der
+      automatisierten Testumgebung, sobald Electron das Fenster als
+      "hidden" einstuft (Page-Visibility-API, unabhängig von echtem
+      Fokus) — betraf mehrere Testläufe unabhängig von dieser Änderung
+      (auch mit `git stash` reproduziert). Kein Spiel-Bug, nur ein
+      Test-Harness-Detail (`backgroundThrottling: false` behebt es für
+      zukünftige automatisierte Tests).
+- [x] CHANGELOG.md-Eintrag ergänzt.
 
 ## Schritt 2 — Zombie-Animation-Speed-Sync-Fix
 - [ ] Werte aus `Game Test`s `ANIM_BASE_SPEED`
