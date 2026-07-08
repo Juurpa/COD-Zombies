@@ -209,44 +209,70 @@ function roomLight(x, z, color = 0xffb27a, intensity = 160, shadowCapable = true
   return l;
 }
 // ---------------- Map-Konfiguration (data/maps/*.json) ----------------
-// Eingebaute Standardwerte für die aktuelle (prozedural gebaute) Map —
-// greifen, falls data/maps/map1.json fehlt oder fehlerhaft ist.
-// "model: null" markiert, dass diese Map kein 3D-Modell lädt, sondern
-// komplett aus Code (Wände/Boden/Texturen weiter unten) aufgebaut wird —
-// im Gegensatz zu zukünftigen Maps mit "model": "assets/maps/<name>/....glb".
-const MAP1_DEFS = {
-  name: 'Bunker (Original)',
-  model: null,
-  spawners: [
-    { x: -40, z: 0, zone: 0 }, { x: 0, z: 40, zone: 0 },
-    { x: 80, z: 0, zone: 1 }, { x: 40, z: 40, zone: 1 },
-    { x: 0, z: -80, zone: 2 }, { x: -40, z: -40, zone: 2 },
-    { x: 80, z: -40, zone: 3 }, { x: 40, z: -80, zone: 3 },
-  ],
-  // Lampen in den Raumzentren der 80×80-Map + je eine Zweitlampe pro Raum
-  // (nur die 4 Hauptlampen werfen Schatten — mehr kostet zu viel Leistung)
-  zoneLights: [
-    { x: 0, z: 0, color: '#ff8833', intensity: 90, shadowCapable: true },    // Zone 0 - Start (Warm Orange)
-    { x: 40, z: 0, color: '#44aaff', intensity: 100, shadowCapable: true },  // Zone 1 - Speed-Cola (Cold Neon Blue)
-    { x: 0, z: -40, color: '#33ff66', intensity: 85, shadowCapable: true },  // Zone 2 - Juggernog (Toxic Green)
-    { x: 40, z: -40, color: '#ff2222', intensity: 110, shadowCapable: true },// Zone 3 - Pack-a-Punch (Emergency Alarm Red)
-    { x: -10, z: 10, color: '#ff8833', intensity: 40, shadowCapable: false },
-    { x: 50, z: -10, color: '#44aaff', intensity: 40, shadowCapable: false },
-    { x: -10, z: -50, color: '#33ff66', intensity: 35, shadowCapable: false },
-    { x: 50, z: -30, color: '#ff2222', intensity: 45, shadowCapable: false },
-  ],
-  wallBuys: [
-    { weapon: 'smg', x: 59.2, z: 0, ry: -1.5707963267948966 },
-    { weapon: 'shotgun', x: -8, z: -59.2, ry: 0 },
-    { weapon: 'rifle', x: 59.2, z: -48, ry: -1.5707963267948966 },
-  ],
-  grenadeBuy: { x: 19.45, z: 12, ry: -1.5707963267948966, cost: 250 },
+// Welche Map aktiv ist, wird vorerst per localStorage-Flag gewählt (siehe
+// window.__debug.setMap weiter unten) — noch kein UI, das kommt mit dem
+// Lobby-Screen (ROADMAP.md Phase 7). Default bleibt 'map1', damit ein
+// frisches Profil sich exakt wie vor dieser Änderung verhält.
+const ACTIVE_MAP_ID = (typeof localStorage !== 'undefined' && localStorage.getItem('untot_map')) || 'map1';
+
+// Eingebaute Standardwerte je Map — greifen, falls data/maps/<id>.json fehlt
+// oder fehlerhaft ist. "model: null" markiert, dass map1 kein 3D-Modell
+// lädt, sondern komplett aus Code (Wände/Boden/Texturen weiter unten)
+// aufgebaut wird — im Gegensatz zu map2 mit "model": "assets/maps/...glb".
+const MAP_BUILTIN_DEFAULTS = {
+  map1: {
+    name: 'Bunker (Original)',
+    model: null,
+    playerStart: { x: 0, z: 3 },
+    // Bewegungs-Clamp (resolveCollision) und "ist drinnen"-Check
+    // (zombieInside) — exakt die bisherigen Hardcoded-Grenzen der Bunker-Map.
+    moveBounds: { minX: -19.4, maxX: 59.4, minZ: -59.4, maxZ: 19.4 },
+    insideBounds: { minX: -19.9, maxX: 59.9, minZ: -59.9, maxZ: 19.9 },
+    spawners: [
+      { x: -40, z: 0, zone: 0 }, { x: 0, z: 40, zone: 0 },
+      { x: 80, z: 0, zone: 1 }, { x: 40, z: 40, zone: 1 },
+      { x: 0, z: -80, zone: 2 }, { x: -40, z: -40, zone: 2 },
+      { x: 80, z: -40, zone: 3 }, { x: 40, z: -80, zone: 3 },
+    ],
+    // Lampen in den Raumzentren der 80×80-Map + je eine Zweitlampe pro Raum
+    // (nur die 4 Hauptlampen werfen Schatten — mehr kostet zu viel Leistung)
+    zoneLights: [
+      { x: 0, z: 0, color: '#ff8833', intensity: 90, shadowCapable: true },    // Zone 0 - Start (Warm Orange)
+      { x: 40, z: 0, color: '#44aaff', intensity: 100, shadowCapable: true },  // Zone 1 - Speed-Cola (Cold Neon Blue)
+      { x: 0, z: -40, color: '#33ff66', intensity: 85, shadowCapable: true },  // Zone 2 - Juggernog (Toxic Green)
+      { x: 40, z: -40, color: '#ff2222', intensity: 110, shadowCapable: true },// Zone 3 - Pack-a-Punch (Emergency Alarm Red)
+      { x: -10, z: 10, color: '#ff8833', intensity: 40, shadowCapable: false },
+      { x: 50, z: -10, color: '#44aaff', intensity: 40, shadowCapable: false },
+      { x: -10, z: -50, color: '#33ff66', intensity: 35, shadowCapable: false },
+      { x: 50, z: -30, color: '#ff2222', intensity: 45, shadowCapable: false },
+    ],
+    wallBuys: [
+      { weapon: 'smg', x: 59.2, z: 0, ry: -1.5707963267948966 },
+      { weapon: 'shotgun', x: -8, z: -59.2, ry: 0 },
+      { weapon: 'rifle', x: 59.2, z: -48, ry: -1.5707963267948966 },
+    ],
+    grenadeBuy: { x: 19.45, z: 12, ry: -1.5707963267948966, cost: 250 },
+  },
+  // Sicherheitsnetz, falls data/maps/map2.json selbst fehlt/kaputt ist —
+  // die echten (ebenfalls vorläufigen) Werte kommen aus dieser Datei.
+  map2: {
+    name: 'Black Ops 1 Grid (Platzhalter)',
+    model: 'assets/maps/map2/call_of_duty_black_ops_1_grid_inspired_map.glb',
+    playerStart: { x: 0, z: 0 },
+    moveBounds: { minX: -108, maxX: 184, minZ: -118, maxZ: 99 },
+    insideBounds: { minX: -108, maxX: 184, minZ: -118, maxZ: 99 },
+    spawners: [{ x: 0, z: 0, zone: 0 }],
+    zoneLights: [{ x: 0, z: 0, color: '#ffffff', intensity: 100, shadowCapable: false }],
+    wallBuys: [],
+    grenadeBuy: { x: 0, z: 0, ry: 0, cost: 250 },
+  },
 };
-applyDataOverrides(MAP1_DEFS, loadGameData('maps/map1.json'));
+const ACTIVE_MAP = MAP_BUILTIN_DEFAULTS[ACTIVE_MAP_ID] || MAP_BUILTIN_DEFAULTS.map1;
+applyDataOverrides(ACTIVE_MAP, loadGameData('maps/' + ACTIVE_MAP_ID + '.json'));
 function hexColor(str) { return parseInt(str.replace('#', ''), 16); }
 
-const lights = MAP1_DEFS.zoneLights.map(l => roomLight(l.x, l.z, hexColor(l.color), l.intensity, l.shadowCapable));
-const flickerLight = lights[2];
+const lights = ACTIVE_MAP.zoneLights.map(l => roomLight(l.x, l.z, hexColor(l.color), l.intensity, l.shadowCapable));
+const flickerLight = lights[Math.min(2, lights.length - 1)];
 
 // ---------------- Prozedurale Texturen ----------------
 function canvasTexture(size, draw, repX = 1, repY = 1) {
@@ -515,6 +541,11 @@ const woodMat = new THREE.MeshStandardMaterial({ map: woodTex, normalMap: woodNo
 const crateMat = new THREE.MeshStandardMaterial({ map: woodTex, normalMap: woodNorm, color: 0xb0906a, roughness: 0.75 });
 const frameMat = new THREE.MeshStandardMaterial({ color: 0x4a4a4e, roughness: 0.85 });
 const glowMat = new THREE.MeshBasicMaterial({ color: 0x2ee6ff });
+
+// Merkt sich, wie viele Objekte schon in der Szene sind, bevor die
+// prozedurale Bunker-Geometrie unten gebaut wird — auf map2 wird alles ab
+// hier später wieder ausgeblendet (siehe unten bei "Spawners").
+const preLevelChildCount = scene.children.length;
 
 // ---------------- Karte ----------------
 const colliders = [];
@@ -1053,12 +1084,60 @@ fakeWindow(0, -59.68, 0); fakeWindow(-19.68, -40, Math.PI / 2);
 fakeWindow(59.68, -40, -Math.PI / 2); fakeWindow(40, -59.68, 0);
 
 // Spawners (Deep in the forest now)
-const spawners = MAP1_DEFS.spawners;
-const dirtMat = new THREE.MeshStandardMaterial({ color: 0x1c150e, roughness: 1 });
-for (const s of spawners) {
-  const d = new THREE.Mesh(new THREE.CylinderGeometry(1.3, 1.6, 0.16, 10), dirtMat);
-  d.position.set(s.x, terrainH(s.x, s.z) + 0.09, s.z);
-  scene.add(d);
+const spawners = ACTIVE_MAP.spawners;
+
+// GLB-Modell der aktiven Map laden (nur wenn "model" gesetzt ist, aktuell
+// also nur map2). Wird unten in die Promise.all-Ladekette der Zombie-Assets
+// eingehängt, damit "assetsLoaded" erst true wird, wenn auch die Map fertig
+// geladen ist.
+const mapModelPromises = [];
+if (ACTIVE_MAP.model) {
+  const mapLoader = new GLTFLoader();
+  mapModelPromises.push(
+    mapLoader.loadAsync(ACTIVE_MAP.model).then(gltf => {
+      // Boden an der Spieler-Startposition per Raycast auf y=0 ausrichten.
+      // Grobe Vereinfachung: funktioniert exakt nur an dieser einen Stelle —
+      // Maps mit starker Höhenvariation (siehe map2, ~36 Einheiten) können
+      // abseits davon über/unter der sichtbaren Geometrie stehen (bekannter
+      // Platzhalter-Punkt, siehe ROADMAP.md Phase 7).
+      const ray = new THREE.Raycaster(
+        new THREE.Vector3(ACTIVE_MAP.playerStart.x, 1e4, ACTIVE_MAP.playerStart.z),
+        new THREE.Vector3(0, -1, 0)
+      );
+      const hits = ray.intersectObject(gltf.scene, true);
+      if (hits.length) {
+        gltf.scene.position.y -= hits[0].point.y;
+      } else {
+        const box = new THREE.Box3().setFromObject(gltf.scene);
+        gltf.scene.position.y -= box.min.y;
+      }
+      gltf.scene.traverse(o => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } });
+      scene.add(gltf.scene);
+    }).catch(e => console.error('[UNTOT] Map-Modell konnte nicht geladen werden:', e))
+  );
+}
+
+if (ACTIVE_MAP_ID === 'map2') {
+  // map1 wurde oben unverändert mitgebaut (garantiert keine Regression für
+  // map1) — hier wird sie für map2 nur ausgeblendet und ihre Kollisions-/
+  // Interaktions-Daten geleert. Kostet auf map2 unnötig Ladezeit/Speicher;
+  // ein sauberes Überspringen bräuchte ein Umbauen der Karte-Sektion in eine
+  // aufrufbare Funktion (Scope-Risiko für map1) — offener Punkt in
+  // ROADMAP.md Phase 7.
+  for (let i = preLevelChildCount; i < scene.children.length; i++) scene.children[i].visible = false;
+  colliders.length = 0;
+  shootTargets.length = 0;
+  interactables.length = 0;
+  windows.length = 0;
+  doors.length = 0;
+  for (const k of Object.keys(doorCenters)) delete doorCenters[k];
+} else {
+  const dirtMat = new THREE.MeshStandardMaterial({ color: 0x1c150e, roughness: 1 });
+  for (const s of spawners) {
+    const d = new THREE.Mesh(new THREE.CylinderGeometry(1.3, 1.6, 0.16, 10), dirtMat);
+    d.position.set(s.x, terrainH(s.x, s.z) + 0.09, s.z);
+    scene.add(d);
+  }
 }
 
 // ---------------- Waffen ----------------
@@ -1091,7 +1170,7 @@ const PERKS = {
 };
 
 const player = {
-  pos: new THREE.Vector3(0, 0, 3),
+  pos: new THREE.Vector3(ACTIVE_MAP.playerStart.x, 0, ACTIVE_MAP.playerStart.z),
   vel: new THREE.Vector3(),
   yVel: 0, onGround: true,
   health: 100, maxHealth: 100, lastHit: -99,
@@ -1408,7 +1487,7 @@ function buildForest() {
     }
   }
 }
-buildForest();
+if (ACTIVE_MAP_ID !== 'map2') buildForest();
 
 // Mondlicht + Sternenhimmel (günstig: ein Richtungslicht, Sprites/Points ohne Nebel)
 {
@@ -1849,7 +1928,8 @@ Promise.all([
     loader.loadAsync('assets/zombie/' + name + '.glb')
       .then(g => { zAssets[name] = g; })
   ),
-  ...audioPromises
+  ...audioPromises,
+  ...mapModelPromises
 ]).catch(e => console.error("Error loading assets", e))
   .finally(() => {
     assetsLoaded = true;
@@ -2250,6 +2330,11 @@ function spawnZombie() {
     win: isDog ? null : nearestW, climbing: false, climbT: 0, climbStart: null, climbEnd: null,
     curAnim: null, staggerT: 0, lungeT: 0, attackAnimT: 0, hitDelay: -1,
     raged: false, headTilt: rand(-0.35, 0.35), swayPhase: rand(0, 10),
+    // Geglättete Bewegungsrichtung (Turn-Rate-limitiert), siehe updateZombieFSM —
+    // verhindert ruckartige Sprünge, wenn sich das Ziel abrupt ändert (z.B.
+    // Fenster ↔ Spieler ↔ Tür-Routing).
+    moveDir: new THREE.Vector3(Math.sin(Math.atan2(player.pos.x - pos.x, player.pos.z - pos.z)), 0,
+      Math.cos(Math.atan2(player.pos.x - pos.x, player.pos.z - pos.z))),
   };
 
   z.playAnim = (name, fade = 0.2) => {
@@ -2906,11 +2991,11 @@ function wallBuy(key, x, z, ry) {
     },
   });
 }
-for (const wb of MAP1_DEFS.wallBuys) wallBuy(wb.weapon, wb.x, wb.z, wb.ry);
+for (const wb of ACTIVE_MAP.wallBuys) wallBuy(wb.weapon, wb.x, wb.z, wb.ry);
 
 // Granaten-Wandkauf (Zone 0)
 {
-  const gb = MAP1_DEFS.grenadeBuy;
+  const gb = ACTIVE_MAP.grenadeBuy;
   const holder = new THREE.Group();
   const plaque = new THREE.Mesh(new THREE.PlaneGeometry(0.8, 0.6), new THREE.MeshLambertMaterial({ color: 0x3a3630 }));
   holder.add(plaque);
@@ -3314,8 +3399,8 @@ function resolveCollision(pos, radius) {
       else pos.z = (pos.z - b.minZ < b.maxZ - pos.z) ? b.minZ - radius : b.maxZ + radius;
     }
   }
-  pos.x = clamp(pos.x, -19.4, 59.4);
-  pos.z = clamp(pos.z, -59.4, 19.4);
+  pos.x = clamp(pos.x, ACTIVE_MAP.moveBounds.minX, ACTIVE_MAP.moveBounds.maxX);
+  pos.z = clamp(pos.z, ACTIVE_MAP.moveBounds.minZ, ACTIVE_MAP.moveBounds.maxZ);
 }
 
 // ---------------- Schießen ----------------
@@ -3487,8 +3572,14 @@ function gameOver() {
 const tmpV = new THREE.Vector3();
 const tmpV2 = new THREE.Vector3();
 function zombieInside(z) {
-  return z.pos.x > -19.9 && z.pos.x < 59.9 && z.pos.z > -59.9 && z.pos.z < 19.9;
+  const b = ACTIVE_MAP.insideBounds;
+  return z.pos.x > b.minX && z.pos.x < b.maxX && z.pos.z > b.minZ && z.pos.z < b.maxZ;
 }
+
+// Max. Drehgeschwindigkeit beim Verfolgen (rad/s) — begrenzt, wie schnell
+// ein Zombie seine Bewegungsrichtung ändern darf (siehe z.moveDir in
+// updateZombieFSM). ~6 rad/s = eine 180°-Wende in ~0.5s.
+const ZOMBIE_TURN_RATE = 6;
 
 // Grid für die Nachbarsuche bei der Zombie-Abstoßung (ersetzt den früheren
 // O(n²)-Check über alle Zombies, siehe CHANGELOG.md "Known follow-ups").
@@ -3595,10 +3686,24 @@ function updateZombieFSM(z, dt, pZone, inside) {
   const distToTarget = tmpV.length();
   if (distToTarget > 0.01) tmpV.divideScalar(distToTarget);
 
+  // Bewegungsrichtung glätten (Turn-Rate-limitiert) statt sie jeden Frame
+  // hart auf die Zielrichtung zu springen — verhindert ruckartige/
+  // "teleportartige" Richtungswechsel, z.B. beim Wechsel Fenster→Spieler.
+  if (distToTarget > 0.01) {
+    const curAngle = Math.atan2(z.moveDir.x, z.moveDir.z);
+    const targetAngle = Math.atan2(tmpV.x, tmpV.z);
+    let diff = targetAngle - curAngle;
+    diff = ((diff + Math.PI) % (Math.PI * 2) + Math.PI * 2) % (Math.PI * 2) - Math.PI;
+    const maxTurn = ZOMBIE_TURN_RATE * dt;
+    const turn = clamp(diff, -maxTurn, maxTurn);
+    const newAngle = curAngle + turn;
+    z.moveDir.set(Math.sin(newAngle), 0, Math.cos(newAngle));
+  }
+
   const distToPlayer = Math.hypot(player.pos.x - z.pos.x, player.pos.z - z.pos.z);
 
   if (!isAttackingWindow && !z.climbing && z.staggerT <= 0 && distToPlayer > 1.35) {
-    z.pos.addScaledVector(tmpV, z.speed * dt);
+    z.pos.addScaledVector(z.moveDir, z.speed * dt);
     if (z.isBoss && Math.random() < 0.02 && distToPlayer < 10) shake = Math.min(1, shake + 0.15);
   }
 
@@ -4055,17 +4160,20 @@ function tick() {
   updateDynamicTrees();
 
   // Zone 0 (Orange) - weiches Flackern eines schwachen Glühfadens
-  lights[0].intensity = 75 + Math.sin(elapsed * 12) * Math.random() * 15;
+  // (defensiv: manche Maps haben weniger als 4 Zonen-Lichter, siehe map2.json)
+  if (lights[0]) lights[0].intensity = 75 + Math.sin(elapsed * 12) * Math.random() * 15;
 
   // Zone 1 (Blau) - unregelmäßiges Neon-Flackern (kaputte Röhre)
-  const neon = Math.random() < 0.05 ? 12 : (95 + Math.sin(elapsed * 45) * 15);
-  lights[1].intensity = neon;
+  if (lights[1]) {
+    const neon = Math.random() < 0.05 ? 12 : (95 + Math.sin(elapsed * 45) * 15);
+    lights[1].intensity = neon;
+  }
 
   // Zone 2 (Grün) - langsames, atemartiges Pulsieren (Giftmüll-Vibe)
-  lights[2].intensity = 75 + Math.sin(elapsed * 3.5) * 20;
+  if (lights[2]) lights[2].intensity = 75 + Math.sin(elapsed * 3.5) * 20;
 
   // Zone 3 (Rot) - schnelles Alarm-Pulsieren
-  lights[3].intensity = 100 + Math.sin(elapsed * 18) * 35;
+  if (lights[3]) lights[3].intensity = 100 + Math.sin(elapsed * 18) * 35;
 
   updateSpawning(dt);
 
@@ -4326,6 +4434,15 @@ window.__debug = {
   render, canvas: () => renderer.domElement, renderer, camera, zAssets, THREE,
   info: () => ({ calls: renderer.info.render.calls, tris: renderer.info.render.triangles }),
   gltfLoaded: () => !!zAssets.tpose,
+  assetsLoaded: () => assetsLoaded,
+  activeMap: () => ACTIVE_MAP_ID,
+  // Wechselt die aktive Map (vorerst der einzige Umschalt-Mechanismus, kein
+  // UI). Setzt nur das Flag und lädt neu — ein Live-Wechsel ohne Reload
+  // würde ein komplettes Neu-Aufbauen der Szene brauchen.
+  setMap(id) {
+    localStorage.setItem('untot_map', id);
+    location.reload();
+  },
   step(n = 60, dt = 1 / 60) {
     for (let i = 0; i < n; i++) {
       elapsed += dt;

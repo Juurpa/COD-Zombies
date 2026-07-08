@@ -1,0 +1,27 @@
+{
+  "_placeholder": true,
+  "_note": "VORLÄUFIG — noch nicht aus echter Level-Analyse abgeleitet. Spawner/Wallbuys/Lichter sind grobe Schätzungen nahe der Modell-Mitte (nicht über die ca. 300x227 Einheiten große Karte verteilt). Alle Spawner nutzen zone 0, da map2 noch kein Zonen-/Tür-System hat. Boden ist per Raycast an playerStart ausgerichtet, aber die Karte hat ~36 Einheiten Höhenunterschied - abseits von playerStart können Akteure daher über/unter der sichtbaren Geometrie stehen. Wand-Kollision ist NICHT implementiert (nur die äußere moveBounds-Box). Vor echtem Einsatz verfeinern (siehe ROADMAP.md Phase 7).",
+  "name": "Black Ops 1 Grid (Sketchfab) [Platzhalter]",
+  "model": "assets/maps/map2/call_of_duty_black_ops_1_grid_inspired_map.glb",
+  "playerStart": { "x": 38, "z": -9 },
+  "moveBounds": { "minX": -108, "maxX": 184, "minZ": -118, "maxZ": 99 },
+  "insideBounds": { "minX": -108, "maxX": 184, "minZ": -118, "maxZ": 99 },
+  "spawners": [
+    { "x": 8, "z": -40, "zone": 0 },
+    { "x": 68, "z": -40, "zone": 0 },
+    { "x": 8, "z": 20, "zone": 0 },
+    { "x": 68, "z": 20, "zone": 0 }
+  ],
+  "zoneLights": [
+    { "x": 38, "z": -9, "color": "#ffddaa", "intensity": 120, "shadowCapable": true },
+    { "x": 8, "z": -40, "color": "#aaddff", "intensity": 80, "shadowCapable": false },
+    { "x": 68, "z": 20, "color": "#ffaaaa", "intensity": 80, "shadowCapable": false },
+    { "x": 68, "z": -40, "color": "#aaffaa", "intensity": 80, "shadowCapable": false }
+  ],
+  "wallBuys": [
+    { "weapon": "smg", "x": 50, "z": -9, "ry": 0 },
+    { "weapon": "shotgun", "x": 20, "z": -9, "ry": 3.141592653589793 },
+    { "weapon": "rifle", "x": 38, "z": 15, "ry": -1.5707963267948966 }
+  ],
+  "grenadeBuy": { "x": 38, "z": -25, "ry": 0, "cost": 250 }
+}
