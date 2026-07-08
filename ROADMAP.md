@@ -112,6 +112,30 @@ konkrete Umsetzungsreihenfolge gebracht.
       unterstützt mehrere Fenster/Renderer-Prozesse gut, naheliegender
       Einstieg vor Online-Koop.
 
+## Phase 7 — Map-Auswahl, Lobby & Ordnerstruktur
+Neue Map ("Black Ops 1 Grid"-inspiriert) als zweite wählbare Map, plus ein
+Lobby-Bereich vor Rundenstart. Voraussetzung: Level-Loading muss dafür erst
+generalisiert werden (aktuell fest im Code verdrahtet, nicht austauschbar).
+
+- [ ] Asset-Format der neuen Map prüfen: `.GLP` ist kein gültiges
+      Three.js-Format (GLTFLoader lädt nur `.glb`/`.gltf`) — klären, ob
+      Tippfehler oder falscher Export, ggf. konvertieren.
+- [ ] Level-Geometrie/Layout aus `js/main.js` in ein austauschbares
+      "Map"-Datenformat extrahieren (analog zu Phase 1: `data/maps/*.json`
+      für Spawn-Punkte, Wallbuy-Positionen, Zonen-Lichter + Verweis auf das
+      Map-Modell), statt fest verdrahteter Level-Aufbau-Logik.
+- [ ] Zweite Map als auswählbare Option integrieren, ohne die bestehende
+      Map zu verändern/kaputt zu machen.
+- [ ] Lobby-Screen vor Rundenstart (neuer UI-Zustand vor `startRound(1)`):
+      Map-Auswahl, Perk-Auswahl (Grundlage: Phase 6 Perks-Punkt), Start-
+      Waffen-Auswahl.
+- [ ] Ordnerstruktur logisch neu ordnen, z.B.:
+      `assets/maps/<mapname>/{model.glb, ...}`,
+      `data/maps/<mapname>.json`,
+      `js/` ggf. in Module aufteilen (map-loading, lobby-ui getrennt von
+      main.js) — nur falls es main.js wirklich übersichtlicher macht,
+      kein Selbstzweck-Refactor.
+
 ## Nicht übernommen / bewusst gestrichen
 - **Echtes ECS-Rewrite**: zu hoher Umbau-Aufwand/Risiko für den aktuellen
   Codestand, kein klarer Spielspaß-Gewinn im Verhältnis zum Aufwand.
