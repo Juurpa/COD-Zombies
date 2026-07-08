@@ -124,13 +124,19 @@ Neue Map ("Black Ops 1 Grid"-inspiriert) als zweite wählbare Map, plus ein
 Lobby-Bereich vor Rundenstart. Voraussetzung: Level-Loading muss dafür erst
 generalisiert werden (aktuell fest im Code verdrahtet, nicht austauschbar).
 
-- [ ] Asset-Format der neuen Map prüfen: `.GLP` ist kein gültiges
-      Three.js-Format (GLTFLoader lädt nur `.glb`/`.gltf`) — klären, ob
-      Tippfehler oder falscher Export, ggf. konvertieren.
-- [ ] Level-Geometrie/Layout aus `js/main.js` in ein austauschbares
+- [x] Asset-Format der neuen Map prüfen: Datei liegt trotz ursprünglicher
+      `.GLP`-Befürchtung bereits als `.glb` vor und ist ein vollständiges,
+      gültiges glTF-2.0-Binary (Header-Länge stimmt mit Dateigröße überein,
+      590 Meshes, per echtem `GLTFLoader` erfolgreich geladen) — keine
+      Konvertierung nötig.
+- [x] Level-Geometrie/Layout aus `js/main.js` in ein austauschbares
       "Map"-Datenformat extrahieren (analog zu Phase 1: `data/maps/*.json`
       für Spawn-Punkte, Wallbuy-Positionen, Zonen-Lichter + Verweis auf das
       Map-Modell), statt fest verdrahteter Level-Aufbau-Logik.
+      (`data/maps/map1.json`, `model: null` da diese Map weiterhin
+      prozedural aus Code gebaut wird — Wände/Boden/Texturen sind
+      bewusst nicht mit-extrahiert, das wäre kein reines Refactoring
+      mehr.)
 - [ ] Zweite Map als auswählbare Option integrieren, ohne die bestehende
       Map zu verändern/kaputt zu machen.
 - [ ] Lobby-Screen vor Rundenstart (neuer UI-Zustand vor `startRound(1)`):
