@@ -1641,6 +1641,21 @@ const knifeGroup = new THREE.Group();
 let audioListener = null;
 const sfxBuffers = {};
 
+// Ordnet jeder Waffe das tatsächlich vorhandene Sound-Datei-Präfix zu.
+// Ohne diese Zuordnung suchen z.B. 'pistol' oder 'rifle' nach nicht existierenden
+// Dateien wie 'pistol_shoot_*' (statt 'revolver_shoot_*') und bleiben stumm.
+// Waffen ohne eigene Aufnahmen (smg, magnum, raygun) bekommen ein klanglich
+// passendes Ersatz-Set, damit keine Waffe komplett ohne Sound dasteht.
+const WEAPON_SOUND_FILES = {
+  pistol: 'revolver',
+  rifle: 'ak47',
+  shotgun: 'shotgun',
+  mg42: 'mg42',
+  smg: 'ak47',
+  magnum: 'revolver',
+  raygun: 'mg42',
+};
+
 function initAudio() {
   if (audioListener) return;
   audioListener = new THREE.AudioListener();
@@ -1693,7 +1708,7 @@ function playTone() {}
 function playDrip() {}
 function playZap() {}
 
-function playShot(w) { play2D(w.key + '_shoot_', 1.0); }
+function playShot(w) { play2D((WEAPON_SOUND_FILES[w.key] || w.key) + '_shoot_', 1.0); }
 function playFootstep(sprint) { play2D('footstep_concrete_', sprint ? 0.8 : 0.4); }
 
 let heartbeatSound = null;
@@ -1721,7 +1736,7 @@ const sfx = {
     const w = currentWeapon();
     if (w) {
       if (w.key === 'shotgun') play2D('shotgun_pump');
-      else play2D(w.key + '_reload');
+      else play2D((WEAPON_SOUND_FILES[w.key] || w.key) + '_reload');
     }
   },
   round: () => play2D('round_start'),
