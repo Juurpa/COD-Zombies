@@ -65,6 +65,58 @@ kein natives Multithreading, kein natives NavMesh/RVO2).
       einen Web Worker auslagern, um den Main-Thread/FPS zu entlasten —
       das ist das JS-Äquivalent zu "Multi-Threading" in diesem Stack.
 
+## Phase 6 — Content & Features (Ideensammlung, noch unpriorisiert)
+Sammlung möglicher nächster Schritte nach Phase 1–5 — noch nicht in eine
+konkrete Umsetzungsreihenfolge gebracht.
+
+### Gameplay-Mechaniken
+- [ ] Perks (Juggernog, Speed Cola, Double Tap): kaufbare permanente Buffs
+      pro Runde, gehen bei Tod verloren — knüpft an bestehendes
+      `applyPowerup`-System an.
+- [ ] Wonder Weapon: einzigartige Spezialwaffe mit ungewöhnlichem Effekt
+      (Kettenblitz, Gefrier-Strahl, Blackhole-Granate), kein Reskin.
+- [ ] Easter Egg / Geheim-Quest: versteckte Rätselkette im Level (Symbole
+      finden, Schalter in Reihenfolge aktivieren) mit Bonus-Freischaltung.
+- [ ] Downed-State statt Instant-Game-Over: Spieler geht bei 0 HP zu Boden,
+      kann sich selbst oder (Koop) durch andere wiederbeleben lassen.
+- [ ] Power-Switch: Strom muss erst aktiviert werden, schaltet
+      Perks/Mystery Box/Türen frei.
+- [ ] Elite-/Special-Zombies: explodierender "Bloater", Schild-Zombie (nur
+      von hinten verwundbar) — Runner-Typ existiert als Chance bereits in
+      `data/zombies.json`.
+
+### Content / Abwechslung
+- [ ] Mehrere Karten/Maps: zweites Level mit eigenem Layout, Wallbuys,
+      Atmosphäre.
+- [ ] Gun-Game-Modus: automatischer Waffenwechsel nach jedem Kill, eigener
+      Nebenmodus ohne neuen Content.
+- [ ] Tägliche Challenges (z.B. "Runde 10 nur mit Messer") mit
+      Bonus/Statistik-Eintrag.
+- [ ] Lore-Fragmente: Audio-Logs/Zettel im Level via Trigger-Zone, wenig
+      Aufwand, baut Atmosphäre auf.
+
+### Meta / Progression
+- [ ] Persistenter Fortschritt: freischaltbare Skins/Waffen-Camos über
+      mehrere Runs (localStorage, analog zu bestehenden High-Scores).
+- [ ] Statistik-/Leaderboard-Screen: Kills, Genauigkeit, beste Runde,
+      Lieblingswaffe.
+- [ ] Schwierigkeitsgrade: Multiplikatoren auf `data/zombies.json`
+      (Health-Kurve, Speed) — dank Phase 1 ohne Code-Änderung umsetzbar.
+
+### Atmosphäre / Polish
+- [ ] Dynamisches Wetter/Tageszeit-Licht ergänzend zu den bestehenden
+      Zonen-Lichtern (orange/blau/grün/rot), z.B. Gewitter-Blitze.
+- [ ] Kill-Streak-Ansagen ("Rampage!", "Unstoppable!") — nutzt die bereits
+      im Repo liegenden, aktuell ungenutzten `announcer_*.mp3`-Sounds.
+- [ ] Bildschirm-Vignette/Screen-Shake bei Explosionen — kleiner Aufwand,
+      spürbarer Game-Feel-Gewinn.
+- [ ] Blut-Decals auf Wänden/Boden statt nur Partikel.
+
+### Multiplayer / Social (größerer Umbau)
+- [ ] Lokaler Koop (Split-Screen oder 2. Fenster via Electron) — Electron
+      unterstützt mehrere Fenster/Renderer-Prozesse gut, naheliegender
+      Einstieg vor Online-Koop.
+
 ## Nicht übernommen / bewusst gestrichen
 - **Echtes ECS-Rewrite**: zu hoher Umbau-Aufwand/Risiko für den aktuellen
   Codestand, kein klarer Spielspaß-Gewinn im Verhältnis zum Aufwand.
