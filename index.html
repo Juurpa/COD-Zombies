@@ -228,20 +228,6 @@
   "three/addons/": "./vendor/three/examples/jsm/"
 } }
 </script>
-<script>
-window.addEventListener('error', (event) => {
-  try {
-    const fs = require('fs');
-    fs.writeFileSync('renderer_error.txt', event.error ? event.error.stack : event.message);
-  } catch (e) {}
-});
-window.addEventListener('unhandledrejection', (event) => {
-  try {
-    const fs = require('fs');
-    fs.writeFileSync('renderer_error.txt', event.reason ? (event.reason.stack || event.reason.message || String(event.reason)) : 'Unhandled Promise Rejection');
-  } catch (e) {}
-});
-</script>
 </head>
 <body>
 
