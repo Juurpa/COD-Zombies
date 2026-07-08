@@ -1,0 +1,375 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>UNTOT — Runden-Zombie-Modus</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { width: 100%; height: 100%; overflow: hidden; background: #000; }
+  body { font-family: "Segoe UI", Arial, sans-serif; color: #ddd; user-select: none; }
+  #game canvas { display: block; }
+
+  .hidden { display: none !important; }
+
+  /* ---------- HUD ---------- */
+  #hud { position: fixed; inset: 0; pointer-events: none; z-index: 4; }
+
+  #crosshair {
+    position: absolute; left: 50%; top: 50%; transform: translate(-50%,-50%);
+    width: 18px; height: 18px;
+  }
+  #crosshair::before, #crosshair::after {
+    content: ""; position: absolute; background: rgba(255,255,255,0.85);
+  }
+  #crosshair::before { left: 50%; top: 0; width: 2px; height: 100%; margin-left: -1px; }
+  #crosshair::after  { top: 50%; left: 0; height: 2px; width: 100%; margin-top: -1px; }
+
+  #hitmarker {
+    position: absolute; left: 50%; top: 50%; transform: translate(-50%,-50%) rotate(45deg);
+    width: 26px; height: 26px; opacity: 0; transition: opacity 0.08s;
+  }
+  #hitmarker::before, #hitmarker::after { content: ""; position: absolute; background: #fff; }
+  #hitmarker.kill::before, #hitmarker.kill::after { background: #ff3b3b; }
+  #hitmarker::before { left: 50%; top: 0; width: 3px; height: 100%; margin-left: -1px; }
+  #hitmarker::after  { top: 50%; left: 0; height: 3px; width: 100%; margin-top: -1px; }
+
+  #blood-overlay {
+    position: absolute; inset: 0; opacity: 0; pointer-events: none; transition: opacity 0.3s ease-out;
+    background: radial-gradient(circle, transparent 20%, rgba(150,0,0,0.6) 80%, rgba(100,0,0,0.9) 100%);
+    box-shadow: inset 0 0 100px rgba(120,0,0,0.8);
+    mix-blend-mode: multiply;
+  }
+  #damage {
+    position: absolute; inset: 0; opacity: 0;
+    background: radial-gradient(ellipse at center, transparent 40%, rgba(180,0,0,0.55) 100%);
+  }
+  #flash { position: absolute; inset: 0; opacity: 0; background: #fff; }
+
+  #points {
+    position: absolute; left: 24px; top: 20px;
+    font-size: 30px; font-weight: 800; color: #ffd76a;
+    text-shadow: 0 0 12px rgba(255,180,0,0.35), 0 2px 3px #000;
+  }
+  #points small { font-size: 14px; font-weight: 600; color: #b99a4e; display: block; letter-spacing: 2px; }
+
+  #round {
+    position: absolute; right: 24px; top: 20px; text-align: right;
+    font-size: 30px; font-weight: 800; color: #ff4d4d;
+    text-shadow: 0 0 14px rgba(255,0,0,0.4), 0 2px 3px #000;
+  }
+  #round small { font-size: 13px; font-weight: 600; color: #a34; display: block; letter-spacing: 2px; }
+
+  #bottomleft { position: absolute; left: 24px; bottom: 24px; width: 260px; }
+  #perkicons { display: flex; gap: 6px; margin-bottom: 8px; min-height: 30px; }
+  .perkicon {
+    width: 30px; height: 30px; border-radius: 6px; border: 1px solid rgba(255,255,255,0.4);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 11px; font-weight: 800; color: #fff; text-shadow: 0 1px 2px #000;
+    box-shadow: 0 0 8px rgba(0,0,0,0.6) inset, 0 2px 4px rgba(0,0,0,0.5);
+  }
+  #healthlabel { font-size: 12px; letter-spacing: 2px; color: #9aa; margin-bottom: 5px; }
+  #healthbar-wrap {
+    width: 100%; height: 14px; background: rgba(0,0,0,0.55);
+    border: 1px solid rgba(255,255,255,0.25); border-radius: 3px; overflow: hidden;
+  }
+  #healthbar { height: 100%; width: 100%; background: linear-gradient(90deg,#3fbf5f,#7ee08a); transition: width 0.15s; }
+  #healthbar.low { background: linear-gradient(90deg,#c22,#f55); }
+
+  #bottomright { position: absolute; right: 24px; bottom: 24px; text-align: right; }
+  #weaponname { font-size: 16px; font-weight: 700; color: #cfd6e4; letter-spacing: 1px; text-shadow: 0 2px 3px #000; }
+  #weaponname.upgraded { color: #6ef0ff; text-shadow: 0 0 10px rgba(0,220,255,0.6); }
+  #ammo { font-size: 34px; font-weight: 800; color: #fff; text-shadow: 0 2px 4px #000; }
+  #ammo.empty { color: #ff5050; }
+  #grenadeicon { font-size: 14px; color: #cbd; }
+  #reloadhint { font-size: 13px; color: #ff9c50; height: 16px; }
+
+  #prompt {
+    position: absolute; left: 50%; bottom: 22%; transform: translateX(-50%);
+    font-size: 18px; font-weight: 700; color: #ffe9a8; text-align: center;
+    background: rgba(0,0,0,0.55); padding: 8px 18px; border-radius: 6px;
+    border: 1px solid rgba(255,215,120,0.35); text-shadow: 0 1px 2px #000;
+  }
+  #prompt.deny { color: #ff7a7a; border-color: rgba(255,80,80,0.4); }
+
+  #powerupbar {
+    position: absolute; left: 50%; bottom: 12%; transform: translateX(-50%);
+    display: flex; gap: 16px; font-size: 15px; font-weight: 800; letter-spacing: 1px;
+  }
+  #powerupbar span { color: #7df; text-shadow: 0 0 10px rgba(80,200,255,0.6), 0 2px 3px #000; }
+
+  #roundflash {
+    position: absolute; left: 50%; top: 34%; transform: translate(-50%,-50%);
+    font-size: 64px; font-weight: 900; color: #ff2e2e; opacity: 0;
+    text-shadow: 0 0 30px rgba(255,0,0,0.7), 0 3px 6px #000;
+    letter-spacing: 4px; transition: opacity 0.6s; text-align: center; white-space: nowrap;
+  }
+
+  #popups { position: absolute; left: 53%; top: 44%; }
+  .pop {
+    position: absolute; font-size: 20px; font-weight: 800; color: #ffd76a;
+    text-shadow: 0 0 8px rgba(255,180,0,0.5), 0 2px 3px #000;
+    animation: popfly 0.8s ease-out forwards; white-space: nowrap;
+  }
+  .pop.special { color: #7df; font-size: 24px; }
+  @keyframes popfly {
+    0% { opacity: 0; transform: translateY(10px); }
+    15% { opacity: 1; }
+    100% { opacity: 0; transform: translateY(-46px); }
+  }
+
+  #fps { position: absolute; left: 24px; top: 84px; font-size: 11px; color: #667; }
+
+  #zcount { font-size: 15px; color: #c66; font-weight: 700; }
+
+  #dmgdir {
+    position: absolute; left: 50%; top: 50%; width: 170px; height: 170px;
+    transform: translate(-50%,-50%); opacity: 0; pointer-events: none;
+  }
+  #dmgdir::before {
+    content: ""; position: absolute; left: 50%; top: 0; transform: translateX(-50%);
+    border-left: 16px solid transparent; border-right: 16px solid transparent;
+    border-bottom: 22px solid rgba(255,40,40,0.85);
+    filter: drop-shadow(0 0 8px rgba(255,0,0,0.8));
+  }
+
+  #toasts {
+    position: fixed; top: 70px; left: 50%; transform: translateX(-50%); z-index: 8;
+    display: flex; flex-direction: column; gap: 8px; pointer-events: none;
+  }
+  .toast {
+    background: rgba(10,12,18,0.92); border: 1px solid #ffd76a; color: #ffd76a;
+    padding: 10px 22px; border-radius: 8px; font-size: 15px; font-weight: 700;
+    animation: toastin 4s ease forwards; text-shadow: 0 1px 2px #000; white-space: nowrap;
+  }
+  @keyframes toastin {
+    0% { opacity: 0; transform: translateY(-16px); }
+    8% { opacity: 1; transform: translateY(0); }
+    85% { opacity: 1; }
+    100% { opacity: 0; }
+  }
+
+  #vignette {
+    position: fixed; inset: 0; pointer-events: none; z-index: 5;
+    background: radial-gradient(ellipse at center, transparent 55%, rgba(0,0,0,0.5) 100%);
+  }
+  #grain {
+    position: fixed; inset: -60%; pointer-events: none; z-index: 6;
+    opacity: 0.055; mix-blend-mode: overlay; background-repeat: repeat;
+    animation: grainmove 0.4s steps(3) infinite;
+  }
+  @keyframes grainmove {
+    0% { transform: translate(0,0); }
+    33% { transform: translate(-3%,2%); }
+    66% { transform: translate(2%,-3%); }
+    100% { transform: translate(0,0); }
+  }
+
+  /* ---------- Overlays ---------- */
+  .overlay {
+    position: fixed; inset: 0; z-index: 10;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    background: radial-gradient(ellipse at center, rgba(10,12,18,0.92) 0%, rgba(2,3,5,0.98) 100%);
+    text-align: center;
+  }
+  .overlay h1 {
+    font-size: 64px; font-weight: 900; letter-spacing: 10px; color: #e33;
+    text-shadow: 0 0 40px rgba(255,0,0,0.5), 0 4px 8px #000; margin-bottom: 6px;
+  }
+  .overlay h2 { font-size: 18px; font-weight: 500; color: #99a; letter-spacing: 3px; margin-bottom: 28px; }
+  .overlay .controls {
+    display: grid; grid-template-columns: auto auto auto auto; gap: 6px 18px;
+    font-size: 14px; color: #bcc4d4; margin-bottom: 26px; text-align: left;
+  }
+  .overlay .controls b { color: #ffd76a; font-weight: 700; text-align: right; }
+  .cta {
+    font-size: 22px; font-weight: 800; color: #fff; letter-spacing: 2px; cursor: pointer;
+    padding: 14px 44px; border: 1px solid rgba(255,80,80,0.6); border-radius: 8px;
+    background: rgba(160,20,20,0.35);
+    animation: pulse 1.6s ease-in-out infinite;
+  }
+  .cta:hover { background: rgba(200,30,30,0.5); }
+  .overlay .sub { margin-top: 16px; font-size: 13px; color: #667; }
+  .overlay button, #settings button {
+    cursor: pointer; font-size: 16px; font-weight: 700; color: #ddd; background: #1a1e28;
+    border: 1px solid #445; border-radius: 6px; padding: 10px 28px; letter-spacing: 1px;
+    margin-top: 14px;
+  }
+  .overlay button:hover, #settings button:hover { background: #2a3040; }
+  @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.55; } }
+
+  #gameover h1 { color: #b22; }
+  #gameover .stats { font-size: 20px; color: #cbd; line-height: 1.9; }
+  #gameover .stats b { color: #ffd76a; }
+  #gameover button { background: #a11; border-color: #f55; color: #fff; font-size: 18px; padding: 12px 34px; }
+  #gameover button:hover { background: #c22; }
+
+  /* ---------- Einstellungen ---------- */
+  #settings {
+    position: fixed; left: 50%; top: 50%; transform: translate(-50%,-50%); z-index: 30;
+    background: #10131b; border: 1px solid #334; border-radius: 12px;
+    padding: 28px 34px; width: 420px; max-width: 92vw;
+    box-shadow: 0 10px 60px rgba(0,0,0,0.8);
+  }
+  #settings h3 { font-size: 20px; letter-spacing: 2px; color: #fff; margin-bottom: 20px; }
+  #settings .row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; gap: 12px; }
+  #settings .row label { font-size: 14px; color: #aab; }
+  #settings .qbtns { display: flex; gap: 6px; }
+  #settings .qbtns button { margin: 0; padding: 6px 14px; font-size: 13px; }
+  #settings .qbtns button.active { background: #a11; border-color: #f55; color: #fff; }
+  #settings input[type=range] { width: 160px; accent-color: #d33; }
+  #settings input[type=checkbox] { accent-color: #d33; width: 16px; height: 16px; }
+  #settings .val { font-size: 13px; color: #ffd76a; width: 34px; text-align: right; }
+  #settings .qdesc { font-size: 11px; color: #667; margin: -10px 0 16px; }
+</style>
+<script type="importmap">
+{ "imports": {
+  "three": "./vendor/three/build/three.module.js",
+  "three/addons/": "./vendor/three/examples/jsm/"
+} }
+</script>
+<script>
+window.addEventListener('error', (event) => {
+  try {
+    const fs = require('fs');
+    fs.writeFileSync('renderer_error.txt', event.error ? event.error.stack : event.message);
+  } catch (e) {}
+});
+window.addEventListener('unhandledrejection', (event) => {
+  try {
+    const fs = require('fs');
+    fs.writeFileSync('renderer_error.txt', event.reason ? (event.reason.stack || event.reason.message || String(event.reason)) : 'Unhandled Promise Rejection');
+  } catch (e) {}
+});
+</script>
+</head>
+<body>
+
+<div id="game"></div>
+<div id="vignette"></div>
+<div id="grain"></div>
+<div id="toasts"></div>
+
+<div id="hud" class="hidden">
+  <div id="blood-overlay"></div>
+  <div id="damage"></div>
+  <div id="flash"></div>
+  <div id="crosshair"></div>
+  <div id="hitmarker"></div>
+  <div id="points"><small>PUNKTE</small><span id="pointsval">500</span></div>
+  <div id="round"><small>RUNDE</small><span id="roundval">1</span><div id="zcount"></div></div>
+  <div id="dmgdir"></div>
+  <div id="bottomleft">
+    <div id="perkicons"></div>
+    <div id="healthlabel">LEBEN</div>
+    <div id="healthbar-wrap"><div id="healthbar"></div></div>
+  </div>
+  <div id="bottomright">
+    <div id="weaponname">M1911</div>
+    <div id="ammo">8 / 72</div>
+    <div id="grenadeicon">💣 ×2</div>
+    <div id="reloadhint"></div>
+  </div>
+  <div id="prompt" class="hidden"></div>
+  <div id="powerupbar"></div>
+  <div id="roundflash"></div>
+  <div id="popups"></div>
+  <div id="fps"></div>
+</div>
+
+<div id="menu" class="overlay">
+  <h1>UNTOT</h1>
+  <h2>RUNDEN-BASIERTER ZOMBIE-MODUS</h2>
+  <div class="controls">
+    <b>WASD</b><span>Bewegen</span>            <b>Maus</b><span>Schießen</span>
+    <b>Shift</b><span>Sprinten</span>          <b>C</b><span>Slide</span>
+    <b>Leertaste</b><span>Springen</span>      <b>R</b><span>Nachladen</span>
+    <b>E (halten)</b><span>Kaufen / Bauen</span>  <b>1 / 2</b><span>Waffe wechseln</span>
+    <b>V</b><span>Messer</span>                <b>G</b><span>Granate</span>
+    <b>L</b><span>Stirnlampe</span>             <span></span>
+  </div>
+  <div class="cta" id="ctastart">▶ KLICKEN ZUM STARTEN</div>
+  <button id="opensettings">⚙ EINSTELLUNGEN</button>
+  <button id="quitbtn" style="background:#522; border-color:#933; margin-top: 14px;">❌ BEENDEN</button>
+  <div class="sub" id="bestround"></div>
+</div>
+
+<div id="pause" class="overlay hidden">
+  <h1 style="font-size:42px">PAUSE</h1>
+  <button id="continuebtn">▶ WEITERSPIELEN</button>
+  <button id="pausesettings">⚙ EINSTELLUNGEN</button>
+  <button id="pauserestart">↻ NEUSTART</button>
+  <button id="pausequitbtn" style="background:#522; border-color:#933; margin-top: 14px;">❌ BEENDEN</button>
+</div>
+
+<div id="gameover" class="overlay hidden">
+  <h1>DU BIST GEFALLEN</h1>
+  <div class="stats">
+    Erreichte Runde: <b id="finalround">1</b><br>
+    Kills: <b id="finalkills">0</b><br>
+    Punkte gesammelt: <b id="finalpoints">0</b><br>
+    <span id="finalstats" style="font-size:15px;color:#9ab"></span><br>
+    <span id="finalbest"></span><br>
+    <span id="scorelist" style="font-size:14px;color:#778"></span>
+  </div>
+  <button id="restart">NOCHMAL</button>
+</div>
+
+<div id="settings" class="hidden">
+  <h3>⚙ EINSTELLUNGEN</h3>
+  <div class="row">
+    <label>Grafikqualität</label>
+    <div class="qbtns">
+      <button data-q="niedrig">Niedrig</button>
+      <button data-q="mittel">Mittel</button>
+      <button data-q="hoch">Hoch</button>
+    </div>
+  </div>
+  <div class="qdesc" id="qdesc"></div>
+  <div class="row">
+    <label>Render-Auflösung</label>
+    <input type="range" id="set-res" min="0.5" max="1.5" step="0.05">
+    <span class="val" id="resval">100%</span>
+  </div>
+  <div class="row">
+    <label>Sichtfeld (FOV)</label>
+    <input type="range" id="set-fov" min="60" max="100" step="1">
+    <span class="val" id="fovval">75</span>
+  </div>
+
+  <div class="row">
+    <label>Blut-Effekt</label>
+    <input type="checkbox" id="set-blood">
+  </div>
+  <div class="row">
+    <label>Maus-Empfindlichkeit</label>
+    <input type="range" id="set-sens" min="0.3" max="2.5" step="0.1">
+    <span class="val" id="sensval">1.0</span>
+  </div>
+  <div class="row">
+    <label>Lautstärke</label>
+    <input type="range" id="set-vol" min="0" max="1" step="0.05">
+    <span class="val" id="volval">80%</span>
+  </div>
+  <div class="row">
+    <label>Filmkorn-Effekt</label>
+    <input type="checkbox" id="set-grain">
+  </div>
+  <div class="row">
+    <label>Ambiente-Sound</label>
+    <input type="checkbox" id="set-ambient">
+  </div>
+  <div class="row">
+    <label>FPS anzeigen</label>
+    <input type="checkbox" id="set-fps">
+  </div>
+  <div class="row">
+    <label>Blut-Effekte (Blood Screen)</label>
+    <input type="checkbox" id="set-blood" checked>
+  </div>
+  <button id="closesettings">SCHLIESSEN</button>
+</div>
+
+<script type="module" src="js/main.js"></script>
+</body>
+</html>
